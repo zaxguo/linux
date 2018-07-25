@@ -6,6 +6,19 @@
 	compatible = "brcm,bcm2837", "brcm,bcm2836";
 
 	soc {
+#ifdef RPI364
+		firmware {
+			optee {
+				compatible = "linaro,optee-tz";
+				method = "smc";
+			};
+		};
+
+		psci {
+			compatible = "arm,psci-0.2";
+			method = "smc";
+		};
+#endif
 
 		arm-pmu {
 #ifdef RPI364
