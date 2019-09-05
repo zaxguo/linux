@@ -86,6 +86,7 @@ modules.builtin
 !.mailmap
 !.cocciconfig
 !.clang-format
+!.ycm_extra_conf.py
 
 #
 # Generated include files
@@ -133,3 +134,4 @@ all.config
 
 # Kdevelop4
 *.kdev4
+compile_commands.json
