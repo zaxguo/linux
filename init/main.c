@@ -439,6 +439,7 @@ static noinline void __ref rest_init(void)
 	 */
 	schedule_preempt_disabled();
 	/* Call into cpu_idle with preempt disabled */
+	printk("lwg:%s:%d:we've landed in the customized kernel!\n", __func__, __LINE__);
 	cpu_startup_entry(CPUHP_ONLINE);
 }
 
