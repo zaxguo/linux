@@ -625,6 +625,8 @@ asmlinkage __visible void __init start_kernel(void)
 	early_boot_irqs_disabled = false;
 	local_irq_enable();
 
+	printk("lwg:%s:%d:hello welcome to my own kernel!\n", __func__, __LINE__);
+
 	kmem_cache_init_late();
 
 	/*

@@ -76,7 +76,9 @@
 #include <linux/miscdevice.h>
 #include <linux/falloc.h>
 #include <linux/uio.h>
+
 #include "loop.h"
+#include "enigma.h"
 
 #include <linux/uaccess.h>
 
@@ -551,7 +553,14 @@ static int lo_rw_aio(struct loop_device *lo, struct loop_cmd *cmd,
 static int do_req_filebacked(struct loop_device *lo, struct request *rq)
 {
 	struct loop_cmd *cmd = blk_mq_rq_to_pdu(rq);
-	loff_t pos = ((loff_t) blk_rq_pos(rq) << 9) + lo->lo_offset;
+	/* lwg: each sector is 512 Bytes hence << 9 */
+	loff_t sector = blk_rq_pos(rq);
+
+	if (btt) {
+		printk("lwg:%s:%d: [%lld] -> [%lld]\n", __func__, __LINE__, sector, btt[sector]);
+	}
+
+	loff_t pos = (sector << 9) + lo->lo_offset;
 
 	/*
 	 * lo_write_simple and lo_read_simple should have been covered
@@ -950,6 +959,9 @@ static int loop_set_fd(struct loop_device *lo, fmode_t mode,
 	 * put /dev/loopXX inode. Later in loop_clr_fd() we bdput(bdev).
 	 */
 	bdgrab(bdev);
+
+	/* lwg: put btt init here */
+	init_btt();
 	return 0;
 
  out_putf:
