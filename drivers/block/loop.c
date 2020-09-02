@@ -79,6 +79,7 @@
 
 #include "loop.h"
 #include "enigma.h"
+#include <linux/delay.h>
 
 #include <linux/uaccess.h>
 
@@ -557,7 +558,18 @@ static int do_req_filebacked(struct loop_device *lo, struct request *rq)
 	loff_t sector = blk_rq_pos(rq);
 
 	if (btt) {
-		printk("lwg:%s:%d: [%lld] -> [%lld]\n", __func__, __LINE__, sector, btt[sector]);
+		/* print out the encrypted btt */
+		printk("lwg:%s:%d: [%lld] -> [%llx]\n", __func__, __LINE__, sector, btt[sector]);
+		/* translate the sec to actual file pos */
+		if (sector != -1) {
+			decrypt_btt_entry(&btt[sector]);
+			if (sector != btt[sector]) {
+				/* possible cause is cache coherence */
+				printk("lwg:%s:%d: decryption failed...delay...", __func__, __LINE__);
+				udelay(10);
+			}
+			sector = btt[sector];
+		}
 	}
 
 	loff_t pos = (sector << 9) + lo->lo_offset;
@@ -2089,6 +2101,11 @@ static int __init loop_init(void)
 	mutex_unlock(&loop_index_mutex);
 
 	printk(KERN_INFO "loop: module loaded\n");
+
+	// lwg enigma loop cb 
+	init_enigma_cb();
+	printk(KERN_INFO "lwg: enigma cb initialized..\n");
+
 	return 0;
 
 misc_out:

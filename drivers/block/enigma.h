@@ -7,6 +7,9 @@
 
 #define BTT_ENTRY_SIZE (sizeof(btt_e))
 
+#define BTT_ENC 0
+#define BTT_DEC	1
+
 typedef loff_t btt_e;
 
 struct enigma_cb {
@@ -19,7 +22,9 @@ extern struct enigma_cb enigma_cb;
 extern loff_t *btt;
 int init_btt(void);
 int alloc_btt(unsigned long size);
-int free_btt(loff_t *btt);
+int free_btt(btt_e *btt);
+int init_enigma_cb(void);
+int decrypt_btt_entry(btt_e *btt);
 
 #endif
 
