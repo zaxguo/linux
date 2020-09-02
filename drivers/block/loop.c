@@ -562,13 +562,18 @@ static int do_req_filebacked(struct loop_device *lo, struct request *rq)
 		printk("lwg:%s:%d: [%lld] -> [%llx]\n", __func__, __LINE__, sector, btt[sector]);
 		/* translate the sec to actual file pos */
 		if (sector != -1) {
-			decrypt_btt_entry(&btt[sector]);
-			if (sector != btt[sector]) {
+			/* lookup the sector in btt */
+			btt_e *out = kmalloc(sizeof(btt_e), GFP_KERNEL);
+			*out = btt[sector];
+			decrypt_btt_entry(out);
+			/* sanity check for dummy btt */
+			if (*out != sector) {
 				/* possible cause is cache coherence */
 				printk("lwg:%s:%d: decryption failed...delay...", __func__, __LINE__);
 				udelay(10);
 			}
-			sector = btt[sector];
+			printk("lwg:%s:%d: decrypted entry = %lld", __func__, __LINE__, *out);
+			sector = (loff_t) *out;
 		}
 	}
 

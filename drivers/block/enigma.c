@@ -24,7 +24,7 @@ static int endec_btt_entry(u8 *in, int endec) {
 		printk("lwg:%s:%d: cannot allocate req...\n", __func__, __LINE__);
 		return 0;
 	}
-	/* make iv (i.e. nonce) 0  */
+	/* make iv (i.e. nonce) uniformly 0  */
 	sg_init_one(&sg, in, BTT_ENTRY_SIZE);
 	skcipher_request_set_callback(req, 0, NULL, NULL);
 	skcipher_request_set_crypt(req, &sg, &sg, BTT_ENTRY_SIZE, iv);
@@ -62,7 +62,6 @@ int alloc_btt(unsigned long size) {
 int init_btt() {
 	if (!btt) {
 		int i, ret;
-		printk("lwg:%s:%d:initializing btt..\n", __func__, __LINE__);
 		ret = alloc_btt(BTT_SIZE);
 		if (!ret) {
 			/* TODO: handle BTT allocation failed */
@@ -71,12 +70,8 @@ int init_btt() {
 		for (i = 0; i < BTT_SIZE; i++) {
 			btt[i] = i;
 			encrypt_btt_entry(btt + i);
-			/* lwg: below is for testing */
-			/*printk("encrypted btt[%d] = %llx...\n", i, btt[i]);*/
-			/*decrypt_btt_entry(btt + i);*/
-			/*printk("decrypted btt[%d] = %llx...\n", i, btt[i]);*/
 		}
-		printk("btt init...\n");
+		printk("lwg:%s:%d:btt initialization complete..\n", __func__, __LINE__);
 		return 0;
 	} else {
 		printk("btt already exists..\n");
@@ -94,7 +89,6 @@ static int init_enigma_crypto(struct crypto_skcipher **cipher) {
 	struct crypto_skcipher *tfm = NULL;
 	// lwg: symmetric key
 	u8 key[64];
-	/*tfm = crypto_alloc_skcipher("xts(aes)", 0, 0);*/
 	/* lwg: des has cipher block size of 8B */
 	tfm = crypto_alloc_skcipher("ecb(des)", 0, 0);
 	if (IS_ERR(tfm)) {
