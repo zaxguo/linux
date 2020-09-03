@@ -8,7 +8,7 @@
 #include <linux/random.h>
 #include "enigma.h"
 
-loff_t *btt;
+
 
 struct enigma_cb enigma_cb;
 
@@ -21,7 +21,7 @@ static int endec_btt_entry(u8 *in, int endec) {
 	struct crypto_skcipher *tfm = enigma_cb.cipher;
 	req = skcipher_request_alloc(tfm, GFP_KERNEL);
 	if (IS_ERR(req)) {
-		printk("lwg:%s:%d: cannot allocate req...\n", __func__, __LINE__);
+		lwg("cannot allocate req...\n");
 		return 0;
 	}
 	/* make iv (i.e. nonce) uniformly 0  */
@@ -50,31 +50,39 @@ int decrypt_btt_entry(btt_e *entry) {
 }
 
 
-int alloc_btt(unsigned long size) {
-	btt = kmalloc(sizeof(btt_e) * size, GFP_KERNEL);
-	if (!btt) {
+btt_e *alloc_btt(unsigned long size) {
+	btt_e *ret = kmalloc(sizeof(btt_e) * size, GFP_KERNEL);
+	if (!ret) {
 		/* TODO: error handling */
-		return -1;
+		return NULL;
 	}
-	return 0;
+	return ret;
 }
 
-int init_btt() {
-	if (!btt) {
+int init_btt_for_device(int lo_number) {
+	struct enigma_cb *cb;
+	if (!has_enigma_cb()) {
+		lwg("enigma_cb is uninitialized!\n");
+		return -1;
+	}
+	cb = &enigma_cb;
+	if (!has_btt_for_device(lo_number)) {
 		int i, ret;
-		ret = alloc_btt(BTT_SIZE);
+		btt_e *_btt;
+		_btt = alloc_btt(BTT_SIZE);
 		if (!ret) {
 			/* TODO: handle BTT allocation failed */
 		}
 		/* lwg: this is a dummy BTT - init BTT entries */
 		for (i = 0; i < BTT_SIZE; i++) {
-			btt[i] = i;
-			encrypt_btt_entry(btt + i);
+			_btt[i] = i;
+			encrypt_btt_entry(_btt + i);
 		}
-		printk("lwg:%s:%d:btt initialization complete..\n", __func__, __LINE__);
+		cb->btt[lo_number] = _btt;
+		lwg("btt initialization for [%d] complete..\n", lo_number);
 		return 0;
 	} else {
-		printk("btt already exists..\n");
+		lwg("btt for [%d] already exists..\n", lo_number);
 		return -1;
 	}
 }

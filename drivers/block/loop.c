@@ -557,8 +557,9 @@ static int do_req_filebacked(struct loop_device *lo, struct request *rq)
 	/* lwg: each sector is 512 Bytes hence << 9 */
 	loff_t sector = blk_rq_pos(rq);
 
-	if (btt) {
+	if (has_btt_for_device(lo->lo_number)) {
 		/* print out the encrypted btt */
+		btt_e *btt = get_btt_for_device(lo->lo_number);
 		printk("lwg:%s:%d: [%lld] -> [%llx]\n", __func__, __LINE__, sector, btt[sector]);
 		/* translate the sec to actual file pos */
 		if (sector != -1) {
@@ -574,6 +575,7 @@ static int do_req_filebacked(struct loop_device *lo, struct request *rq)
 			}
 			printk("lwg:%s:%d: decrypted entry = %lld", __func__, __LINE__, *out);
 			sector = (loff_t) *out;
+			kfree(out);
 		}
 	}
 
@@ -981,7 +983,11 @@ static int loop_set_fd(struct loop_device *lo, fmode_t mode,
 	bdgrab(bdev);
 
 	/* lwg: put btt init here */
-	init_btt();
+
+	/* add BTT when loop device is added */
+	if (has_enigma_cb()) {
+		init_btt_for_device(lo->lo_number);
+	}
 	return 0;
 
  out_putf:
@@ -1885,6 +1891,9 @@ static int loop_add(struct loop_device **l, int i)
 	atomic_set(&lo->lo_refcnt, 0);
 	lo->lo_number		= i;
 	spin_lock_init(&lo->lo_lock);
+
+	/* lwg: we can tap in to the partition table here.. */
+
 	disk->major		= LOOP_MAJOR;
 	disk->first_minor	= i << part_shift;
 	disk->fops		= &lo_fops;
@@ -1893,6 +1902,7 @@ static int loop_add(struct loop_device **l, int i)
 	sprintf(disk->disk_name, "loop%d", i);
 	add_disk(disk);
 	*l = lo;
+
 	return lo->lo_number;
 
 out_free_queue:
@@ -2107,7 +2117,7 @@ static int __init loop_init(void)
 
 	printk(KERN_INFO "loop: module loaded\n");
 
-	// lwg enigma loop cb 
+	// lwg: one-time init of enigma loop cb
 	init_enigma_cb();
 	printk(KERN_INFO "lwg: enigma cb initialized..\n");
 
