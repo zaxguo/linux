@@ -1431,6 +1431,7 @@ static int __find_block(struct dm_thin_device *td, dm_block_t block,
 	return r;
 }
 
+/* lwg: block is virtual, plus dev id it can locate physical */
 int dm_thin_find_block(struct dm_thin_device *td, dm_block_t block,
 		       int can_issue_io, struct dm_thin_lookup_result *result)
 {

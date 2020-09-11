@@ -2118,7 +2118,7 @@ static int __init loop_init(void)
 	printk(KERN_INFO "loop: module loaded\n");
 
 	// lwg: one-time init of enigma loop cb
-	init_enigma_cb();
+	/*init_enigma_cb();*/
 	printk(KERN_INFO "lwg: enigma cb initialized..\n");
 
 	return 0;

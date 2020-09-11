@@ -1850,7 +1850,10 @@ static void process_cell(struct thin_c *tc, struct dm_bio_prison_cell *cell)
 		return;
 	}
 
+	/* lwg: this needs to be intercepted */
 	r = dm_thin_find_block(tc->td, block, 1, &lookup_result);
+	printk("lwg:%s:%d:dev[%d]:[%llx]->[%llx]\n", __func__,
+			__LINE__, block, lookup_result.block);
 	switch (r) {
 	case 0:
 		if (lookup_result.shared)
@@ -1895,6 +1898,7 @@ static void process_cell(struct thin_c *tc, struct dm_bio_prison_cell *cell)
 static void process_bio(struct thin_c *tc, struct bio *bio)
 {
 	struct pool *pool = tc->pool;
+	/* lwg: this extracts the logical io of a thin dev, i.e. virtual blk */
 	dm_block_t block = get_bio_block(tc, bio);
 	struct dm_bio_prison_cell *cell;
 	struct dm_cell_key key;
