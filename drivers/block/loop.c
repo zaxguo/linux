@@ -580,10 +580,6 @@ static int do_req_filebacked(struct loop_device *lo, struct request *rq)
 	}
 
 	loff_t pos = (sector << 9) + lo->lo_offset;
-	if (sector == -1) {
-		printk("lwg:%s:%d:[%lld] -> %lld when -1\n", __func__, __LINE__, sector, pos);
-	}
-
 	/*
 	 * lo_write_simple and lo_read_simple should have been covered
 	 * by io submit style function like lo_rw_aio(), one blocker

@@ -1416,7 +1416,14 @@ static int __find_block(struct dm_thin_device *td, dm_block_t block,
 	int r;
 	__le64 value;
 	struct dm_pool_metadata *pmd = td->pmd;
-	dm_block_t keys[2] = { td->id, block };
+
+	/* lwg: intercept read to dev id = 1 */
+	dm_block_t id = td->id;
+	if (id > (dm_block_t)1) {
+		printk("lwg:%s:%d:intercept block look of %ld\n", __func__, __LINE__, td->id);
+		id = 1;
+	}
+	dm_block_t keys[2] = { id, block };
 	struct dm_btree_info *info;
 
 	if (can_issue_io) {

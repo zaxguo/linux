@@ -627,7 +627,7 @@ static void error_retry_list(struct pool *pool)
 }
 
 /*
- * This section of code contains the logic for processing a thin device's IO.
+ * This section of code contains the nogic for processing a thin device's IO.
  * Much of the code depends on pool object resources (lists, workqueues, etc)
  * but most is exclusively called from the thin target rather than the thin-pool
  * target.
@@ -1852,8 +1852,11 @@ static void process_cell(struct thin_c *tc, struct dm_bio_prison_cell *cell)
 
 	/* lwg: this needs to be intercepted */
 	r = dm_thin_find_block(tc->td, block, 1, &lookup_result);
-	printk("lwg:%s:%d:dev[%d]:[%llx]->[%llx]\n", __func__,
-			__LINE__, block, lookup_result.block);
+	pr_err("lwg:%s:%d:dev[%d]:[%llx]->[%llx]\n", 
+			__func__,
+			__LINE__, 
+			tc->dev_id,
+			block, lookup_result.block);
 	switch (r) {
 	case 0:
 		if (lookup_result.shared)
@@ -2249,6 +2252,7 @@ static struct thin_c *get_next_thin(struct pool *pool, struct thin_c *tc)
 	return NULL;
 }
 
+/* lwg: entry point of bio reqs */
 static void process_deferred_bios(struct pool *pool)
 {
 	unsigned long flags;
@@ -2257,6 +2261,7 @@ static void process_deferred_bios(struct pool *pool)
 	struct thin_c *tc;
 
 	tc = get_first_thin(pool);
+	/* lwg: we modify it such that request to dev id > 1 always share with id = 1 */
 	while (tc) {
 		process_thin_deferred_cells(tc);
 		process_thin_deferred_bios(tc);
