@@ -7,12 +7,15 @@
 #include <linux/err.h>
 #include <linux/random.h>
 #include "enigma.h"
+#include "enigma_types.h"
 
 
 
 struct enigma_cb enigma_cb;
 
 // in-place dencryption
+// TODO: move this to TZ
+// note: the in address cannot be a stack addr
 static int endec_btt_entry(u8 *in, int endec) {
 	int err;
 	u8 iv[16];
@@ -45,8 +48,14 @@ static int encrypt_btt_entry(btt_e *entry) {
 	return endec_btt_entry((u8 *)entry, BTT_ENC);
 }
 
-int decrypt_btt_entry(btt_e *entry) {
-	return endec_btt_entry((u8 *)entry, BTT_DEC);
+int decrypt_btt_entry(btt_e *e_block) {
+	u8 *entry = kmalloc(sizeof(btt_e), GFP_KERNEL);
+	/* TODO: seems non-avoidable memory move.. we have to do world switch anyway */
+	memcpy(entry, e_block, sizeof(btt_e));
+	endec_btt_entry((u8 *)entry, BTT_DEC);
+	memcpy(e_block, entry, sizeof(btt_e));
+	kfree(entry);
+	return 0;
 }
 
 
@@ -111,11 +120,45 @@ static int init_enigma_crypto(struct crypto_skcipher **cipher) {
 	return 0;
 }
 
+static btt_e _lookup_block(btt_e *btt, btt_e vblock) {
+	return btt[vblock];
+}
+
+/* lookup_result will be shared
+ * */
+static int alloc_block(int lo, btt_e vblock, struct lookup_result *re) {
+	/* TODO: send req to TZ */
+	return 0;
+}
+
+int lookup_block(int lo, btt_e vblock, struct lookup_result *re) {
+	if (!has_enigma_cb()) {
+		return LOOKUP_FAIL;
+	}
+	btt_e *btt = get_btt_for_device(lo);
+	btt_e pblock = _lookup_block(btt, vblock);
+	if (!pblk_allocated(pblock)) {
+		/* this sends the req to tz */
+		struct lookup_result tmp;
+		int err = alloc_block(lo, vblock, &tmp);
+		if (err == ALLOC_FAIL) {
+			re->block = NULL_BLK;
+			re->shared = false;
+			return LOOKUP_FAIL;
+		}
+	}
+	re->block = pblock;
+	/* TODO: xxx */
+	re->shared = false;
+	return 0;
+}
+
 int init_enigma_cb (void) {
 	int ret;
 	struct enigma_cb* cb = &enigma_cb;
 	ret = init_enigma_crypto(&cb->cipher);
 	printk("enigma_cb initialized tfm -- %p\n", enigma_cb.cipher);
+	printk(KERN_INFO "lwg: enigma cb initialized..\n");
 	return 0;
 }
 

@@ -78,7 +78,7 @@
 #include <linux/uio.h>
 
 #include "loop.h"
-#include "enigma.h"
+#include "enigma/enigma.h"
 #include <linux/delay.h>
 
 #include <linux/uaccess.h>
@@ -554,31 +554,32 @@ static int lo_rw_aio(struct loop_device *lo, struct loop_cmd *cmd,
 static int do_req_filebacked(struct loop_device *lo, struct request *rq)
 {
 	struct loop_cmd *cmd = blk_mq_rq_to_pdu(rq);
+	int dev_id = lo->lo_number;
 	/* lwg: each sector is 512 Bytes hence << 9 */
 	loff_t sector = blk_rq_pos(rq);
 
-	if (has_btt_for_device(lo->lo_number)) {
-		/* print out the encrypted btt */
-		btt_e *btt = get_btt_for_device(lo->lo_number);
-		printk("lwg:%s:%d: [%lld] -> [%llx]\n", __func__, __LINE__, sector, btt[sector]);
-		/* translate the sec to actual file pos */
+	if (has_btt_for_device(dev_id)) {
+		/* TODO: unclear why there are requests w/ sector = -1 */
 		if (sector != -1) {
-			/* lookup the sector in btt */
-			btt_e *out = kmalloc(sizeof(btt_e), GFP_KERNEL);
-			*out = btt[sector];
-			decrypt_btt_entry(out);
-			/* sanity check for dummy btt */
-			if (*out != sector) {
+			btt_e e_block;
+			int err;
+			struct lookup_result result;
+			err = lookup_block(dev_id, sector, &result);
+			if (err) {
+				/* TODO: Error handling */
+			}
+			/* an encrypted block */
+			e_block = result.block;
+			/* TODO: break sharing if it's write */
+			decrypt_btt_entry(&e_block);
+			if (e_block != sector) {
 				/* possible cause is cache coherence */
-				printk("lwg:%s:%d: decryption failed...delay...", __func__, __LINE__);
+				printk("lwg:%s:%d: decryption failed...[%llx] != [%llx]", __func__, __LINE__, e_block, sector);
 				udelay(10);
 			}
-			printk("lwg:%s:%d: decrypted entry = %lld", __func__, __LINE__, *out);
-			sector = (loff_t) *out;
-			kfree(out);
+			sector = e_block;
 		}
 	}
-
 	loff_t pos = (sector << 9) + lo->lo_offset;
 	/*
 	 * lo_write_simple and lo_read_simple should have been covered
@@ -2114,9 +2115,7 @@ static int __init loop_init(void)
 	printk(KERN_INFO "loop: module loaded\n");
 
 	// lwg: one-time init of enigma loop cb
-	/*init_enigma_cb();*/
-	printk(KERN_INFO "lwg: enigma cb initialized..\n");
-
+	init_enigma_cb();
 	return 0;
 
 misc_out:
