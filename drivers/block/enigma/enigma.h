@@ -2,7 +2,9 @@
 #define _ENIGMA_H
 #include <linux/types.h>
 #include <linux/crypto.h>
+#include <linux/arm-smccc.h>
 #include "enigma_types.h"
+#include "../../drivers/tee/optee/optee_smc.h"
 
 #define BTT_SIZE (30001)
 #define BTT_ENTRY_SIZE (sizeof(btt_e))

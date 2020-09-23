@@ -127,13 +127,13 @@ static int xor_init(struct loop_device *lo, const struct loop_info64 *info)
 
 static struct loop_func_table none_funcs = {
 	.number = LO_CRYPT_NONE,
-}; 
+};
 
 static struct loop_func_table xor_funcs = {
 	.number = LO_CRYPT_XOR,
 	.transfer = transfer_xor,
 	.init = xor_init
-}; 
+};
 
 /* xfer_funcs[0] is special - its release function is never called */
 static struct loop_func_table *xfer_funcs[MAX_LO_CRYPT] = {
@@ -560,6 +560,11 @@ static int do_req_filebacked(struct loop_device *lo, struct request *rq)
 
 	if (has_btt_for_device(dev_id)) {
 		/* TODO: unclear why there are requests w/ sector = -1 */
+		struct arm_smccc_res res;
+		lwg("switch...\n");
+		arm_smccc_smc(OPTEE_SMC_GET_SHM_CONFIG, 0xe, 0xa, 0xd,
+					  0x0, 0x0, 0x0, 0x0,
+					  &res);
 		if (sector != -1) {
 			btt_e e_block;
 			int err;
@@ -577,7 +582,9 @@ static int do_req_filebacked(struct loop_device *lo, struct request *rq)
 				printk("lwg:%s:%d: decryption failed...[%llx] != [%llx]", __func__, __LINE__, e_block, sector);
 				udelay(10);
 			}
-			sector = e_block;
+			lwg("op = %d\n", (req_op(rq)));
+			/*sector = e_block;*/
+			sector = 0;
 		}
 	}
 	loff_t pos = (sector << 9) + lo->lo_offset;
@@ -636,6 +643,7 @@ static void loop_reread_partitions(struct loop_device *lo,
 	 * must be at least one and it can only become zero when the
 	 * current holder is released.
 	 */
+	lwg("entered..\n");
 	if (!atomic_read(&lo->lo_refcnt))
 		rc = __blkdev_reread_part(bdev);
 	else
@@ -971,8 +979,10 @@ static int loop_set_fd(struct loop_device *lo, fmode_t mode,
 	lo->lo_state = Lo_bound;
 	if (part_shift)
 		lo->lo_flags |= LO_FLAGS_PARTSCAN;
-	if (lo->lo_flags & LO_FLAGS_PARTSCAN)
+	if (lo->lo_flags & LO_FLAGS_PARTSCAN) {
+		lwg("hit..");
 		loop_reread_partitions(lo, bdev);
+	}
 
 	/* Grab the block_device to prevent its destruction after we
 	 * put /dev/loopXX inode. Later in loop_clr_fd() we bdput(bdev).
