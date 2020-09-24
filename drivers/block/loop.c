@@ -560,11 +560,6 @@ static int do_req_filebacked(struct loop_device *lo, struct request *rq)
 
 	if (has_btt_for_device(dev_id)) {
 		/* TODO: unclear why there are requests w/ sector = -1 */
-		struct arm_smccc_res res;
-		lwg("switch...\n");
-		arm_smccc_smc(OPTEE_SMC_GET_SHM_CONFIG, 0xe, 0xa, 0xd,
-					  0x0, 0x0, 0x0, 0x0,
-					  &res);
 		if (sector != -1) {
 			btt_e e_block;
 			int err;
@@ -576,15 +571,22 @@ static int do_req_filebacked(struct loop_device *lo, struct request *rq)
 			/* an encrypted block */
 			e_block = result.block;
 			/* TODO: break sharing if it's write */
+
+			struct arm_smccc_res res;
+			lwg("switch...pass the encrypted block\n");
+			arm_smccc_smc(ENIGMA_SMC_CALL, ENIGMA_RD, (uint32_t) sector, 0x0,
+						  0x0, 0x0, 0x0, 0x0,
+						  &res);
+			lwg("get res = %lx, %lx, %lx, %lx\n", res.a0, res.a1, res.a2, res.a3);
 			decrypt_btt_entry(&e_block);
 			if (e_block != sector) {
 				/* possible cause is cache coherence */
 				printk("lwg:%s:%d: decryption failed...[%llx] != [%llx]", __func__, __LINE__, e_block, sector);
 				udelay(10);
 			}
-			lwg("op = %d\n", (req_op(rq)));
 			/*sector = e_block;*/
-			sector = 0;
+			sector = res.a0;
+			/*sector = 0;*/
 		}
 	}
 	loff_t pos = (sector << 9) + lo->lo_offset;
@@ -597,6 +599,8 @@ static int do_req_filebacked(struct loop_device *lo, struct request *rq)
 	 * of the req at one time. And direct read IO doesn't need to
 	 * run flush_dcache_page().
 	 */
+
+	/* --- lwg: below is the trusted part where we emulate the in-TZ disk driver ---- */
 	switch (req_op(rq)) {
 	case REQ_OP_FLUSH:
 		return lo_req_flush(lo, rq);

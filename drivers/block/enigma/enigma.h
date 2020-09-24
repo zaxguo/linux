@@ -4,6 +4,7 @@
 #include <linux/crypto.h>
 #include <linux/arm-smccc.h>
 #include "enigma_types.h"
+#include "enigma_smc.h"
 #include "../../drivers/tee/optee/optee_smc.h"
 
 #define BTT_SIZE (30001)
