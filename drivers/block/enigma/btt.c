@@ -10,6 +10,7 @@
 #include "enigma_types.h"
 
 
+#define NEEDS_ENDEC		0
 
 struct enigma_cb enigma_cb;
 
@@ -45,16 +46,25 @@ static int endec_btt_entry(u8 *in, int endec) {
 }
 
 static int encrypt_btt_entry(btt_e *entry) {
+#ifdef NEEDS_ENDEC
 	return endec_btt_entry((u8 *)entry, BTT_ENC);
+#else
+	return 0;
+#endif
 }
 
 int decrypt_btt_entry(btt_e *e_block) {
+
+#ifdef NEEDS_ENDEC
 	u8 *entry = kmalloc(sizeof(btt_e), GFP_KERNEL);
 	/* TODO: seems non-avoidable memory move.. we have to do world switch anyway */
 	memcpy(entry, e_block, sizeof(btt_e));
 	endec_btt_entry((u8 *)entry, BTT_DEC);
 	memcpy(e_block, entry, sizeof(btt_e));
 	kfree(entry);
+#else
+	/* empty body */
+#endif
 	return 0;
 }
 
@@ -84,7 +94,7 @@ int init_btt_for_device(int lo_number) {
 		}
 		/* lwg: this is a dummy BTT - init BTT entries */
 		for (i = 0; i < BTT_SIZE; i++) {
-			_btt[i] = i;
+			_btt[i] = NULL_BLK;
 			encrypt_btt_entry(_btt + i);
 		}
 		cb->btt[lo_number] = _btt;

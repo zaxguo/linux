@@ -269,6 +269,8 @@ static int lo_write_bvec(struct file *file, struct bio_vec *bvec, loff_t *ppos)
 	struct iov_iter i;
 	ssize_t bw;
 
+	lwg("writing %d bytes..\n", bvec->bv_len);
+
 	iov_iter_bvec(&i, ITER_BVEC | WRITE, bvec, 1, bvec->bv_len);
 
 	file_start_write(file);
@@ -574,7 +576,7 @@ static int do_req_filebacked(struct loop_device *lo, struct request *rq)
 
 			struct arm_smccc_res res;
 			lwg("switch...pass the encrypted block\n");
-			arm_smccc_smc(ENIGMA_SMC_CALL, ENIGMA_RD, (uint32_t) sector, 0x0,
+			arm_smccc_smc(ENIGMA_SMC_CALL, req_op(rq), (uint32_t) sector, 0x0,
 						  0x0, 0x0, 0x0, 0x0,
 						  &res);
 			lwg("get res = %lx, %lx, %lx, %lx\n", res.a0, res.a1, res.a2, res.a3);
@@ -585,7 +587,7 @@ static int do_req_filebacked(struct loop_device *lo, struct request *rq)
 				udelay(10);
 			}
 			/*sector = e_block;*/
-			sector = res.a0;
+			/*sector = res.a0;*/
 			/*sector = 0;*/
 		}
 	}
