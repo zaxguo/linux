@@ -295,6 +295,8 @@ static int lo_write_simple(struct loop_device *lo, struct request *rq,
 	struct req_iterator iter;
 	int ret = 0;
 
+	/* lwg: segment bvec into separate sectors  */
+
 	rq_for_each_segment(bvec, rq, iter) {
 		ret = lo_write_bvec(lo->lo_backing_file, &bvec, &pos);
 		if (ret < 0)
@@ -347,6 +349,13 @@ static int lo_read_simple(struct loop_device *lo, struct request *rq,
 	struct req_iterator iter;
 	struct iov_iter i;
 	ssize_t len;
+#if 0
+	/* by the time we got here, the bio is already merged */
+	struct bio *tmp_bio;
+	__rq_for_each_bio(tmp_bio, rq) {
+		lwg("sector = [%lx], size = %d\n", tmp_bio->bi_iter.bi_sector, tmp_bio->bi_iter.bi_size);
+	}
+#endif 
 
 	rq_for_each_segment(bvec, rq, iter) {
 		iov_iter_bvec(&i, ITER_BVEC, &bvec, 1, bvec.bv_len);

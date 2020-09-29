@@ -2275,6 +2275,13 @@ blk_qc_t submit_bio(struct bio *bio)
 	 */
 	if (bio_has_data(bio)) {
 		unsigned int count;
+		struct gendisk *disk = bio->bi_disk;
+		/* need to split bio if it is loop device */
+		if (!strncmp("loop", disk->disk_name, 4)) {
+			printk("lwg:%s:%d:submitting bio to loop, sectors = %d\n",
+					__func__, __LINE__, bio_sectors(bio));
+		}
+
 
 		if (unlikely(bio_op(bio) == REQ_OP_WRITE_SAME))
 			count = queue_logical_block_size(bio->bi_disk->queue) >> 9;
