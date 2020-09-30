@@ -349,7 +349,7 @@ static int lo_read_simple(struct loop_device *lo, struct request *rq,
 	struct req_iterator iter;
 	struct iov_iter i;
 	ssize_t len;
-#if 0
+#if 1
 	/* by the time we got here, the bio is already merged */
 	struct bio *tmp_bio;
 	__rq_for_each_bio(tmp_bio, rq) {

@@ -2258,6 +2258,31 @@ out:
 }
 EXPORT_SYMBOL(generic_make_request);
 
+/* note the bios cannot be linked */
+static struct bio *enigma_split_bio(struct bio *orig) {
+	int first = 1;
+	struct bio* ret, *head, *prev;
+	head = prev = orig;
+	while(bio_sectors(orig) > 1){
+		ret = bio_split(orig, 1, 0, 0);
+		if (first) {
+			first = 0;
+			head = ret;
+			prev = head;
+		} else {
+			prev->bi_next = ret;
+			prev = ret;
+		}
+	}
+	/* chain up the last remaining */
+	if (!orig->bi_next) {
+	   prev->bi_next = orig;
+	   orig->bi_next = head;
+	}
+	return head;
+}
+
+
 /**
  * submit_bio - submit a bio to the block device layer for I/O
  * @bio: The &struct bio which describes the I/O
@@ -2278,8 +2303,29 @@ blk_qc_t submit_bio(struct bio *bio)
 		struct gendisk *disk = bio->bi_disk;
 		/* need to split bio if it is loop device */
 		if (!strncmp("loop", disk->disk_name, 4)) {
-			printk("lwg:%s:%d:submitting bio to loop, sectors = %d\n",
-					__func__, __LINE__, bio_sectors(bio));
+			struct request_queue *q = disk->queue;
+			if (q) {
+			printk("lwg:%s:%d:submitting bio to loop, sectors = %d, fn = %pf, end_io = %pf\n",
+					__func__, __LINE__, bio_sectors(bio),
+					q->make_request_fn, bio->bi_end_io);
+			}
+			/* donot modify original one */
+			struct bio* iter, *head;
+			struct bio* test = bio_clone_fast(bio, 0, 0);
+			head = enigma_split_bio(test);
+#if 1
+			do {
+				printk("lwg:%s:%d:block [%lu], size [%d], sector [%d], end = %pf, page = %p, page offset = %u",
+					__func__, __LINE__,
+					iter->bi_iter.bi_sector, iter->bi_iter.bi_size,
+					bio_sectors(iter), iter->bi_end_io,
+					iter->bi_io_vec->bv_page, iter->bi_io_vec->bv_offset);
+				/* the function cannot take linked bio! */
+				struct bio* tmp = bio_clone_fast(iter, 0, 0);
+				generic_make_request(tmp);
+				iter = iter->bi_next;
+			} while(head && iter != head);
+#endif 
 		}
 
 

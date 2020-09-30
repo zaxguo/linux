@@ -1650,6 +1650,7 @@ static blk_qc_t blk_mq_make_request(struct request_queue *q, struct bio *bio)
 
 	blk_queue_bounce(q, &bio);
 
+	/* this is to split large bio -- not what we want */
 	blk_queue_split(q, &bio);
 
 	if (!bio_integrity_prep(bio))
