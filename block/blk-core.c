@@ -2314,6 +2314,8 @@ blk_qc_t submit_bio(struct bio *bio)
 			struct bio* test = bio_clone_fast(bio, 0, 0);
 			head = enigma_split_bio(test);
 #if 1
+			int count = 0;
+			iter = head;
 			do {
 				printk("lwg:%s:%d:block [%lu], size [%d], sector [%d], end = %pf, page = %p, page offset = %u",
 					__func__, __LINE__,
@@ -2322,10 +2324,12 @@ blk_qc_t submit_bio(struct bio *bio)
 					iter->bi_io_vec->bv_page, iter->bi_io_vec->bv_offset);
 				/* the function cannot take linked bio! */
 				struct bio* tmp = bio_clone_fast(iter, 0, 0);
+				tmp->bi_next = NULL;
+				tmp->bi_io_vec->bv_offset = (count++) << 9;
 				generic_make_request(tmp);
 				iter = iter->bi_next;
 			} while(head && iter != head);
-#endif 
+#endif
 		}
 
 

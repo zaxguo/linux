@@ -353,7 +353,7 @@ static int lo_read_simple(struct loop_device *lo, struct request *rq,
 	/* by the time we got here, the bio is already merged */
 	struct bio *tmp_bio;
 	__rq_for_each_bio(tmp_bio, rq) {
-		lwg("sector = [%lx], size = %d\n", tmp_bio->bi_iter.bi_sector, tmp_bio->bi_iter.bi_size);
+		lwg("sector = [%lx], size = %d, page = %p\n", tmp_bio->bi_iter.bi_sector, tmp_bio->bi_iter.bi_size, tmp_bio->bi_io_vec->bv_page);
 	}
 #endif 
 
@@ -584,7 +584,7 @@ static int do_req_filebacked(struct loop_device *lo, struct request *rq)
 			/* TODO: break sharing if it's write */
 
 			struct arm_smccc_res res;
-			lwg("switch...pass the encrypted block\n");
+			lwg("switch...pass the encrypted block %u\n", (uint32_t) sector);
 			arm_smccc_smc(ENIGMA_SMC_CALL, req_op(rq), (uint32_t) sector, 0x0,
 						  0x0, 0x0, 0x0, 0x0,
 						  &res);
