@@ -80,6 +80,7 @@
 #include "loop.h"
 #include "enigma/enigma.h"
 #include <linux/delay.h>
+#include <linux/buffer_head.h>
 
 #include <linux/uaccess.h>
 
@@ -349,13 +350,6 @@ static int lo_read_simple(struct loop_device *lo, struct request *rq,
 	struct req_iterator iter;
 	struct iov_iter i;
 	ssize_t len;
-#if 1
-	/* by the time we got here, the bio is already merged */
-	struct bio *tmp_bio;
-	__rq_for_each_bio(tmp_bio, rq) {
-		lwg("sector = [%lx], size = %d, page = %p\n", tmp_bio->bi_iter.bi_sector, tmp_bio->bi_iter.bi_size, tmp_bio->bi_io_vec->bv_page);
-	}
-#endif 
 
 	rq_for_each_segment(bvec, rq, iter) {
 		iov_iter_bvec(&i, ITER_BVEC, &bvec, 1, bvec.bv_len);
@@ -372,8 +366,15 @@ static int lo_read_simple(struct loop_device *lo, struct request *rq,
 				zero_fill_bio(bio);
 			break;
 		}
+#if 1
+		struct bio *bio;
+		__rq_for_each_bio(bio, rq) {
+			lwg("bio status = %d\n", blk_status_to_errno(bio->bi_status));
+		}
+#endif
 		cond_resched();
 	}
+
 
 	return 0;
 }
@@ -475,6 +476,7 @@ static void lo_complete_rq(struct request *rq)
 	}
 
 	blk_mq_end_request(rq, cmd->ret < 0 ? BLK_STS_IOERR : BLK_STS_OK);
+	lwg("complte rq..\n");
 }
 
 static void lo_rw_aio_do_completion(struct loop_cmd *cmd)
@@ -1800,6 +1802,7 @@ static void loop_handle_cmd(struct loop_cmd *cmd)
 	if (!cmd->use_aio || ret) {
 		cmd->ret = ret ? -EIO : 0;
 		blk_mq_complete_request(cmd->rq);
+		lwg("cmd completed...ret = %ld\n", cmd->ret);
 	}
 }
 

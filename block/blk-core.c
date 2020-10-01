@@ -2282,7 +2282,16 @@ static struct bio *enigma_split_bio(struct bio *orig) {
 	return head;
 }
 
+static inline void dump_single_bio(struct bio* bio) {
+	BUG_ON(!bio);
+	printk("lwg:%s:%d:block [%lu], size [%d], sector [%d], end = %pf, page = %p, page offset = %u",
+	__func__, __LINE__,
+	bio->bi_iter.bi_sector, bio->bi_iter.bi_size,
+	bio_sectors(bio), bio->bi_end_io,
+	bio->bi_io_vec->bv_page, bio->bi_io_vec->bv_offset);
+}
 
+extern void mpage_end_io(struct bio *bio);
 /**
  * submit_bio - submit a bio to the block device layer for I/O
  * @bio: The &struct bio which describes the I/O
@@ -2304,31 +2313,31 @@ blk_qc_t submit_bio(struct bio *bio)
 		/* need to split bio if it is loop device */
 		if (!strncmp("loop", disk->disk_name, 4)) {
 			struct request_queue *q = disk->queue;
-			if (q) {
 			printk("lwg:%s:%d:submitting bio to loop, sectors = %d, fn = %pf, end_io = %pf\n",
 					__func__, __LINE__, bio_sectors(bio),
 					q->make_request_fn, bio->bi_end_io);
-			}
+#if 1
 			/* donot modify original one */
 			struct bio* iter, *head;
 			struct bio* test = bio_clone_fast(bio, 0, 0);
 			head = enigma_split_bio(test);
-#if 1
 			int count = 0;
 			iter = head;
+			blk_qc_t ret = BLK_QC_T_NONE;
 			do {
-				printk("lwg:%s:%d:block [%lu], size [%d], sector [%d], end = %pf, page = %p, page offset = %u",
-					__func__, __LINE__,
-					iter->bi_iter.bi_sector, iter->bi_iter.bi_size,
-					bio_sectors(iter), iter->bi_end_io,
-					iter->bi_io_vec->bv_page, iter->bi_io_vec->bv_offset);
 				/* the function cannot take linked bio! */
 				struct bio* tmp = bio_clone_fast(iter, 0, 0);
 				tmp->bi_next = NULL;
 				tmp->bi_io_vec->bv_offset = (count++) << 9;
-				generic_make_request(tmp);
 				iter = iter->bi_next;
+				/* we reach the last bio, configure end_io notification */
+				if (iter == head) {
+					tmp->bi_end_io = mpage_end_io;
+				}
+				/*dump_single_bio(tmp);*/
+				ret = generic_make_request(tmp);
 			} while(head && iter != head);
+			return ret;
 #endif
 		}
 

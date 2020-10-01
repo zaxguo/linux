@@ -44,7 +44,7 @@
  * status of that page is hard.  See end_buffer_async_read() for the details.
  * There is no point in duplicating all that complexity.
  */
-static void mpage_end_io(struct bio *bio)
+void mpage_end_io(struct bio *bio)
 {
 	struct bio_vec *bv;
 	int i;
@@ -57,6 +57,7 @@ static void mpage_end_io(struct bio *bio)
 
 	bio_put(bio);
 }
+EXPORT_SYMBOL(mpage_end_io);
 
 static struct bio *mpage_bio_submit(int op, int op_flags, struct bio *bio)
 {
@@ -100,8 +101,8 @@ mpage_alloc(struct block_device *bdev,
  * them.  So when the buffer is up to date and the page size == block size,
  * this marks the page up to date instead of adding new buffers.
  */
-static void 
-map_buffer_to_page(struct page *page, struct buffer_head *bh, int page_block) 
+static void
+map_buffer_to_page(struct page *page, struct buffer_head *bh, int page_block)
 {
 	struct inode *inode = page->mapping->host;
 	struct buffer_head *page_bh, *head;
@@ -114,7 +115,7 @@ map_buffer_to_page(struct page *page, struct buffer_head *bh, int page_block)
 		 */
 		if (inode->i_blkbits == PAGE_SHIFT &&
 		    buffer_uptodate(bh)) {
-			SetPageUptodate(page);    
+			SetPageUptodate(page);
 			return;
 		}
 		create_empty_buffers(page, i_blocksize(inode), 0);
@@ -232,7 +233,7 @@ do_mpage_readpage(struct bio *bio, struct page *page, unsigned nr_pages,
 			map_buffer_to_page(page, map_bh, page_block);
 			goto confused;
 		}
-	
+
 		if (first_hole != blocks_per_page)
 			goto confused;		/* hole -> non-hole */
 
@@ -427,7 +428,7 @@ EXPORT_SYMBOL(mpage_readpage);
  *
  * If all blocks are found to be contiguous then the page can go into the
  * BIO.  Otherwise fall back to the mapping's writepage().
- * 
+ *
  * FIXME: This code wants an estimate of how many pages are still to be
  * written, so it can intelligently allocate a suitably-sized BIO.  For now,
  * just allocate full-size (16-page) BIOs.
