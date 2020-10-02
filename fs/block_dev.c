@@ -94,6 +94,8 @@ void kill_bdev(struct block_device *bdev)
 	if (mapping->nrpages == 0 && mapping->nrexceptional == 0)
 		return;
 
+	/* lwg: kill bdev hangs kernel .. */
+	/*printk("lwg:%s:%d:killing %s...\n", __func__, __LINE__, bdev->bd_disk->disk_name);*/
 	invalidate_bh_lrus();
 	truncate_inode_pages(mapping, 0);
 }	

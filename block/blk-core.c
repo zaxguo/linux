@@ -781,6 +781,9 @@ int blk_queue_enter(struct request_queue *q, bool nowait)
 	while (true) {
 		int ret;
 
+		/* this is fine. */
+		/*printk("lwg:%s:%d:spinning...\n", __func__, __LINE__);*/
+
 		if (percpu_ref_tryget_live(&q->q_usage_counter))
 			return 0;
 
@@ -1800,7 +1803,9 @@ void blk_init_request_from_bio(struct request *req, struct bio *bio)
 	else
 		req->ioprio = IOPRIO_PRIO_VALUE(IOPRIO_CLASS_NONE, 0);
 	req->write_hint = bio->bi_write_hint;
+	printk("lwg:%s:%d:hit\n", __func__, __LINE__);
 	blk_rq_bio_prep(req->q, req, bio);
+	printk("lwg:%s:%d:hit\n", __func__, __LINE__);
 }
 EXPORT_SYMBOL_GPL(blk_init_request_from_bio);
 
@@ -2216,15 +2221,20 @@ blk_qc_t generic_make_request(struct bio *bio)
 	bio_list_init(&bio_list_on_stack[0]);
 	current->bio_list = bio_list_on_stack;
 	do {
+		/* this is fine */
+		/*printk("lwg:%s:%d:hit\n", __func__, __LINE__);*/
 		struct request_queue *q = bio->bi_disk->queue;
 
 		if (likely(blk_queue_enter(q, bio->bi_opf & REQ_NOWAIT) == 0)) {
 			struct bio_list lower, same;
 
+
 			/* Create a fresh bio_list for all subordinate requests */
 			bio_list_on_stack[1] = bio_list_on_stack[0];
 			bio_list_init(&bio_list_on_stack[0]);
+			/* lwg:this never returns */
 			ret = q->make_request_fn(q, bio);
+			printk("lwg:%s:%d:hit\n", __func__, __LINE__);
 
 			blk_queue_exit(q);
 
@@ -2233,11 +2243,13 @@ blk_qc_t generic_make_request(struct bio *bio)
 			 */
 			bio_list_init(&lower);
 			bio_list_init(&same);
-			while ((bio = bio_list_pop(&bio_list_on_stack[0])) != NULL)
+			while ((bio = bio_list_pop(&bio_list_on_stack[0])) != NULL) {
+				printk("lwg:%s:%d:hit\n", __func__, __LINE__);
 				if (q == bio->bi_disk->queue)
 					bio_list_add(&same, bio);
 				else
 					bio_list_add(&lower, bio);
+			}
 			/* now assemble so we handle the lowest level first */
 			bio_list_merge(&bio_list_on_stack[0], &lower);
 			bio_list_merge(&bio_list_on_stack[0], &same);
@@ -2284,11 +2296,12 @@ static struct bio *enigma_split_bio(struct bio *orig) {
 
 static inline void dump_single_bio(struct bio* bio) {
 	BUG_ON(!bio);
-	printk("lwg:%s:%d:block [%lu], size [%d], sector [%d], end = %pf, page = %p, page offset = %u",
+	printk("lwg:%s:%d:block [%lu], size [%d], sector [%d], end = %pf, page = %p, page offset = %u, len = %u, seg = %u",
 	__func__, __LINE__,
 	bio->bi_iter.bi_sector, bio->bi_iter.bi_size,
 	bio_sectors(bio), bio->bi_end_io,
-	bio->bi_io_vec->bv_page, bio->bi_io_vec->bv_offset);
+	bio->bi_io_vec->bv_page, bio->bi_io_vec->bv_offset,
+	bio->bi_io_vec->bv_len, bio->bi_vcnt);
 }
 
 extern void mpage_end_io(struct bio *bio);
@@ -2329,12 +2342,13 @@ blk_qc_t submit_bio(struct bio *bio)
 				struct bio* tmp = bio_clone_fast(iter, 0, 0);
 				tmp->bi_next = NULL;
 				tmp->bi_io_vec->bv_offset = (count++) << 9;
+				tmp->bi_io_vec->bv_len = (1) << 9;
 				iter = iter->bi_next;
 				/* we reach the last bio, configure end_io notification */
 				if (iter == head) {
 					tmp->bi_end_io = mpage_end_io;
 				}
-				/*dump_single_bio(tmp);*/
+				dump_single_bio(tmp);
 				ret = generic_make_request(tmp);
 			} while(head && iter != head);
 			return ret;
@@ -3133,6 +3147,8 @@ void blk_rq_bio_prep(struct request_queue *q, struct request *rq,
 		rq->nr_phys_segments = bio_phys_segments(q, bio);
 	else if (bio_op(bio) == REQ_OP_DISCARD)
 		rq->nr_phys_segments = 1;
+
+	printk("lwg:%s:%d:hit\n", __func__, __LINE__);
 
 	rq->__data_len = bio->bi_iter.bi_size;
 	rq->bio = rq->biotail = bio;

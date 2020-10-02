@@ -211,6 +211,7 @@ void blk_queue_split(struct request_queue *q, struct bio **bio)
 		/* there isn't chance to merge the splitted bio */
 		split->bi_opf |= REQ_NOMERGE;
 
+		printk("lwg:%s:%d:.....???",__func__, __LINE__);
 		bio_chain(split, *bio);
 		trace_block_split(q, split, (*bio)->bi_iter.bi_sector);
 		generic_make_request(*bio);
@@ -302,20 +303,27 @@ void blk_recount_segments(struct request_queue *q, struct bio *bio)
 	unsigned short seg_cnt;
 
 	/* estimate segment number by bi_vcnt for non-cloned bio */
-	if (bio_flagged(bio, BIO_CLONED))
+	if (bio_flagged(bio, BIO_CLONED)) {
+		printk("lwg:%s:%d:.....???",__func__, __LINE__);
 		seg_cnt = bio_segments(bio);
-	else
+	}
+	else {
 		seg_cnt = bio->bi_vcnt;
+	}
 
 	if (test_bit(QUEUE_FLAG_NO_SG_MERGE, &q->queue_flags) &&
-			(seg_cnt < queue_max_segments(q)))
+			(seg_cnt < queue_max_segments(q))){
 		bio->bi_phys_segments = seg_cnt;
+		printk("lwg:%s:%d:.....???",__func__, __LINE__);
+	}
 	else {
+		printk("lwg:%s:%d:queue flags = %lx\n", __func__, __LINE__, q->queue_flags);
 		struct bio *nxt = bio->bi_next;
 
 		bio->bi_next = NULL;
 		bio->bi_phys_segments = __blk_recalc_rq_segments(q, bio, false);
 		bio->bi_next = nxt;
+		printk("lwg:%s:%d:.....???",__func__, __LINE__);
 	}
 
 	bio_set_flag(bio, BIO_SEG_VALID);

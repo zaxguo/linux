@@ -1802,7 +1802,8 @@ static void loop_handle_cmd(struct loop_cmd *cmd)
 	if (!cmd->use_aio || ret) {
 		cmd->ret = ret ? -EIO : 0;
 		blk_mq_complete_request(cmd->rq);
-		lwg("cmd completed...ret = %ld\n", cmd->ret);
+		struct request_queue *rq = lo->lo_queue;
+		lwg("cmd completed...ret = %ld, pending = %d\n", cmd->ret, rq->nr_pending);
 	}
 }
 
