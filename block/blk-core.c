@@ -2348,6 +2348,14 @@ blk_qc_t submit_bio(struct bio *bio)
 				if (iter == head) {
 					tmp->bi_end_io = mpage_end_io;
 				}
+
+				struct bio_vec bv;
+				struct bvec_iter _iter;
+				int count = 0;
+				/* Catch the bug ! this will loop forever! */
+				bio_for_each_segment(bv, tmp, _iter) {
+					count++;
+				}
 				dump_single_bio(tmp);
 				ret = generic_make_request(tmp);
 			} while(head && iter != head);
