@@ -866,9 +866,11 @@ static void check_mm(struct mm_struct *mm)
 	for (i = 0; i < NR_MM_COUNTERS; i++) {
 		long x = atomic_long_read(&mm->rss_stat.count[i]);
 
-		if (unlikely(x))
+		if (unlikely(x)) {
 			printk(KERN_ALERT "BUG: Bad rss-counter state "
 					  "mm:%p idx:%d val:%ld\n", mm, i, x);
+			dump_stack();
+		}
 	}
 
 	if (atomic_long_read(&mm->nr_ptes))

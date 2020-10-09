@@ -2329,7 +2329,11 @@ blk_qc_t submit_bio(struct bio *bio)
 			printk("lwg:%s:%d:submitting bio to loop, sectors = %d, fn = %pf, end_io = %pf\n",
 					__func__, __LINE__, bio_sectors(bio),
 					q->make_request_fn, bio->bi_end_io);
+			if (bio_sectors(bio) == 1) {
+				goto normal;
+			}
 #if 1
+			/* this is wrong -- cannot clone bio */
 			/* donot modify original one */
 			struct bio* iter, *head;
 			struct bio* test = bio_clone_fast(bio, 0, 0);
@@ -2337,31 +2341,29 @@ blk_qc_t submit_bio(struct bio *bio)
 			int count = 0;
 			iter = head;
 			blk_qc_t ret = BLK_QC_T_NONE;
+			bio_end_io_t *end_io = bio->bi_end_io;
 			do {
 				/* the function cannot take linked bio! */
-				struct bio* tmp = bio_clone_fast(iter, 0, 0);
+				struct bio* tmp = bio_clone_bioset(iter, 0, 0);
+
 				tmp->bi_next = NULL;
 				tmp->bi_io_vec->bv_offset = (count++) << 9;
 				tmp->bi_io_vec->bv_len = (1) << 9;
 				iter = iter->bi_next;
 				/* we reach the last bio, configure end_io notification */
 				if (iter == head) {
-					tmp->bi_end_io = mpage_end_io;
-				}
-
-				struct bio_vec bv;
-				struct bvec_iter _iter;
-				int count = 0;
-				/* Catch the bug ! this will loop forever! */
-				bio_for_each_segment(bv, tmp, _iter) {
-					count++;
+					tmp->bi_end_io = end_io;
 				}
 				dump_single_bio(tmp);
 				ret = generic_make_request(tmp);
+				dump_single_bio(tmp);
 			} while(head && iter != head);
+			WARN_ON(count > 8);
+			printk("lwg:%s:%d:finish submitting bio..\n", __func__, __LINE__);
 			return ret;
 #endif
 		}
+normal:
 
 
 		if (unlikely(bio_op(bio) == REQ_OP_WRITE_SAME))

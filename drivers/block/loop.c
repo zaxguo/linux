@@ -367,10 +367,10 @@ static int lo_read_simple(struct loop_device *lo, struct request *rq,
 			break;
 		}
 #if 1
-		struct bio *bio;
-		__rq_for_each_bio(bio, rq) {
-			lwg("bio status = %d\n", blk_status_to_errno(bio->bi_status));
-		}
+		lwg("page = %p, bv len = %d, offset = %d\n", 
+			 bvec.bv_page,
+			 bvec.bv_len,
+			 bvec.bv_offset);
 #endif
 		cond_resched();
 	}

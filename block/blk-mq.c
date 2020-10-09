@@ -1540,9 +1540,7 @@ void blk_mq_flush_plug_list(struct blk_plug *plug, bool from_schedule)
 
 static void blk_mq_bio_to_request(struct request *rq, struct bio *bio)
 {
-	printk("lwg:%s:%d:hit\n", __func__, __LINE__);
 	blk_init_request_from_bio(rq, bio);
-	printk("lwg:%s:%d:hit\n", __func__, __LINE__);
 	blk_account_io_start(rq, true);
 }
 
@@ -1655,9 +1653,7 @@ static blk_qc_t blk_mq_make_request(struct request_queue *q, struct bio *bio)
 	/* this is to split large bio -- not what we want */
 	/* ----- this is the function that blocks -----  */
 	/* lwg: try skipping this */
-	if (bio->bi_iter.bi_size != 512) {
-		blk_queue_split(q, &bio);
-	}
+	blk_queue_split(q, &bio);
 	/*printk("lwg:%s:%d:hit\n", __func__, __LINE__);*/
 
 	if (!bio_integrity_prep(bio))
