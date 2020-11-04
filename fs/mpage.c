@@ -56,7 +56,6 @@ void mpage_end_io(struct bio *bio)
 	}
 
 	bio_put(bio);
-	printk("lwg:%s:%d:end\n", __func__, __LINE__);
 }
 EXPORT_SYMBOL(mpage_end_io);
 

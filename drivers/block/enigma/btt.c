@@ -46,7 +46,7 @@ static int endec_btt_entry(u8 *in, int endec) {
 }
 
 static int encrypt_btt_entry(btt_e *entry) {
-#ifdef NEEDS_ENDEC
+#if NEEDS_ENDEC
 	return endec_btt_entry((u8 *)entry, BTT_ENC);
 #else
 	return 0;
@@ -55,7 +55,7 @@ static int encrypt_btt_entry(btt_e *entry) {
 
 int decrypt_btt_entry(btt_e *e_block) {
 
-#ifdef NEEDS_ENDEC
+#if NEEDS_ENDEC
 	u8 *entry = kmalloc(sizeof(btt_e), GFP_KERNEL);
 	/* TODO: seems non-avoidable memory move.. we have to do world switch anyway */
 	memcpy(entry, e_block, sizeof(btt_e));
@@ -68,6 +68,19 @@ int decrypt_btt_entry(btt_e *e_block) {
 	return 0;
 }
 
+static int _update_btt(btt_e *btt, btt_e vblk, btt_e e_blk) {
+	if (!btt) {
+		return BTT_UPDATE_FAIL;
+	}
+	btt[vblk] = e_blk;
+	return 0;
+}
+
+int update_btt(int dev_id, btt_e vblk, btt_e e_blk) {
+	lwg("update [%d]: [%x] -> [%x]\n", dev_id, vblk, e_blk);
+	btt_e *btt = get_btt_for_device(dev_id);
+	return _update_btt(btt, vblk, e_blk);
+}
 
 btt_e *alloc_btt(unsigned long size) {
 	btt_e *ret = kmalloc(sizeof(btt_e) * size, GFP_KERNEL);
@@ -147,6 +160,8 @@ int lookup_block(int lo, btt_e vblock, struct lookup_result *re) {
 	}
 	btt_e *btt = get_btt_for_device(lo);
 	btt_e pblock = _lookup_block(btt, vblock);
+#if 0
+	/* normal world does not care if the block is allocated or not */
 	if (!pblk_allocated(pblock)) {
 		/* this sends the req to tz */
 		struct lookup_result tmp;
@@ -157,8 +172,10 @@ int lookup_block(int lo, btt_e vblock, struct lookup_result *re) {
 			return LOOKUP_FAIL;
 		}
 	}
+#endif
 	re->block = pblock;
-	/* TODO: xxx */
+	/* TODO: xxx
+	 * Normal world does not if it is shared or not */
 	re->shared = false;
 	return 0;
 }

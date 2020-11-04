@@ -1803,9 +1803,7 @@ void blk_init_request_from_bio(struct request *req, struct bio *bio)
 	else
 		req->ioprio = IOPRIO_PRIO_VALUE(IOPRIO_CLASS_NONE, 0);
 	req->write_hint = bio->bi_write_hint;
-	printk("lwg:%s:%d:hit\n", __func__, __LINE__);
 	blk_rq_bio_prep(req->q, req, bio);
-	printk("lwg:%s:%d:hit\n", __func__, __LINE__);
 }
 EXPORT_SYMBOL_GPL(blk_init_request_from_bio);
 
@@ -2234,8 +2232,6 @@ blk_qc_t generic_make_request(struct bio *bio)
 			bio_list_init(&bio_list_on_stack[0]);
 			/* lwg:this never returns */
 			ret = q->make_request_fn(q, bio);
-			printk("lwg:%s:%d:hit\n", __func__, __LINE__);
-
 			blk_queue_exit(q);
 
 			/* sort new bios into those for a lower level
@@ -2314,6 +2310,8 @@ extern void mpage_end_io(struct bio *bio);
  * interfaces; @bio must be presetup and ready for I/O.
  *
  */
+
+extern void end_bio_bh_io_sync(struct bio *bio);
 blk_qc_t submit_bio(struct bio *bio)
 {
 	/*
@@ -2342,6 +2340,10 @@ blk_qc_t submit_bio(struct bio *bio)
 			iter = head;
 			blk_qc_t ret = BLK_QC_T_NONE;
 			bio_end_io_t *end_io = bio->bi_end_io;
+			void *priv;
+			if (end_io == end_bio_bh_io_sync) {
+				priv = bio->bi_private;	
+			}
 			do {
 				/* the function cannot take linked bio! */
 				struct bio* tmp = bio_clone_bioset(iter, 0, 0);
@@ -2353,8 +2355,11 @@ blk_qc_t submit_bio(struct bio *bio)
 				/* we reach the last bio, configure end_io notification */
 				if (iter == head) {
 					tmp->bi_end_io = end_io;
+					/* notification delivery */
+					if (priv) {
+						tmp->bi_private = priv;
+					}
 				}
-				dump_single_bio(tmp);
 				ret = generic_make_request(tmp);
 				dump_single_bio(tmp);
 			} while(head && iter != head);
@@ -3158,7 +3163,6 @@ void blk_rq_bio_prep(struct request_queue *q, struct request *rq,
 	else if (bio_op(bio) == REQ_OP_DISCARD)
 		rq->nr_phys_segments = 1;
 
-	printk("lwg:%s:%d:hit\n", __func__, __LINE__);
 
 	rq->__data_len = bio->bi_iter.bi_size;
 	rq->bio = rq->biotail = bio;

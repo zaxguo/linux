@@ -1668,12 +1668,10 @@ static blk_qc_t blk_mq_make_request(struct request_queue *q, struct bio *bio)
 
 	wb_acct = wbt_wait(q->rq_wb, bio, NULL);
 
-	printk("lwg:%s:%d:hit\n", __func__, __LINE__);
 
 	trace_block_getrq(q, bio, bio->bi_opf);
 
 	rq = blk_mq_get_request(q, bio, bio->bi_opf, &data);
-	printk("lwg:%s:%d:hit\n", __func__, __LINE__);
 	if (unlikely(!rq)) {
 		__wbt_done(q->rq_wb, wb_acct);
 		if (bio->bi_opf & REQ_NOWAIT)
@@ -1697,14 +1695,11 @@ static blk_qc_t blk_mq_make_request(struct request_queue *q, struct bio *bio)
 			blk_mq_run_hw_queue(data.hctx, true);
 		}
 	} else if (plug && q->nr_hw_queues == 1) {
-		printk("lwg:%s:%d:hit\n", __func__, __LINE__);
 		struct request *last = NULL;
 
 		blk_mq_put_ctx(data.ctx);
-		printk("lwg:%s:%d:hit\n", __func__, __LINE__);
 		/* lwg: this never returns... */
 		blk_mq_bio_to_request(rq, bio);
-		printk("lwg:%s:%d:hit\n", __func__, __LINE__);
 
 		/*
 		 * @request_count may become stale because of schedule
@@ -1715,7 +1710,6 @@ static blk_qc_t blk_mq_make_request(struct request_queue *q, struct bio *bio)
 		else if (blk_queue_nomerges(q))
 			request_count = blk_plug_queued_count(q);
 
-		printk("lwg:%s:%d:hit\n", __func__, __LINE__);
 
 		if (!request_count)
 			trace_block_plug(q);
@@ -1727,11 +1721,9 @@ static blk_qc_t blk_mq_make_request(struct request_queue *q, struct bio *bio)
 			blk_flush_plug_list(plug, false);
 			trace_block_plug(q);
 		}
-		printk("lwg:%s:%d:hit\n", __func__, __LINE__);
 
 		list_add_tail(&rq->queuelist, &plug->mq_list);
 	} else if (plug && !blk_queue_nomerges(q)) {
-		printk("lwg:%s:%d:hit\n", __func__, __LINE__);
 		blk_mq_bio_to_request(rq, bio);
 
 		/*
@@ -1756,17 +1748,14 @@ static blk_qc_t blk_mq_make_request(struct request_queue *q, struct bio *bio)
 					&cookie);
 		}
 	} else if (q->nr_hw_queues > 1 && is_sync) {
-		printk("lwg:%s:%d:hit\n", __func__, __LINE__);
 		blk_mq_put_ctx(data.ctx);
 		blk_mq_bio_to_request(rq, bio);
 		blk_mq_try_issue_directly(data.hctx, rq, &cookie);
 	} else if (q->elevator) {
-		printk("lwg:%s:%d:hit\n", __func__, __LINE__);
 		blk_mq_put_ctx(data.ctx);
 		blk_mq_bio_to_request(rq, bio);
 		blk_mq_sched_insert_request(rq, false, true, true, true);
 	} else {
-		printk("lwg:%s:%d:hit\n", __func__, __LINE__);
 		blk_mq_put_ctx(data.ctx);
 		blk_mq_bio_to_request(rq, bio);
 		blk_mq_queue_io(data.hctx, data.ctx, rq);

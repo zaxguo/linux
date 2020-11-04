@@ -3,8 +3,9 @@
 
 /* Some error codes also go here */
 
-#define LOOKUP_FAIL 0x1
-#define ALLOC_FAIL	0x2
-#define NULL_CB		0x3
+#define LOOKUP_FAIL		0x1
+#define ALLOC_FAIL		0x2
+#define NULL_CB			0x3
+#define BTT_UPDATE_FAIL	0x4
 
 #endif

@@ -270,7 +270,6 @@ static int lo_write_bvec(struct file *file, struct bio_vec *bvec, loff_t *ppos)
 	struct iov_iter i;
 	ssize_t bw;
 
-	lwg("writing %d bytes..\n", bvec->bv_len);
 
 	iov_iter_bvec(&i, ITER_BVEC | WRITE, bvec, 1, bvec->bv_len);
 
@@ -366,7 +365,7 @@ static int lo_read_simple(struct loop_device *lo, struct request *rq,
 				zero_fill_bio(bio);
 			break;
 		}
-#if 1
+#if 0
 		lwg("page = %p, bv len = %d, offset = %d\n", 
 			 bvec.bv_page,
 			 bvec.bv_len,
@@ -476,7 +475,6 @@ static void lo_complete_rq(struct request *rq)
 	}
 
 	blk_mq_end_request(rq, cmd->ret < 0 ? BLK_STS_IOERR : BLK_STS_OK);
-	lwg("complte rq..\n");
 }
 
 static void lo_rw_aio_do_completion(struct loop_cmd *cmd)
@@ -583,25 +581,23 @@ static int do_req_filebacked(struct loop_device *lo, struct request *rq)
 			}
 			/* an encrypted block */
 			e_block = result.block;
-			/* TODO: break sharing if it's write */
-
 			struct arm_smccc_res res;
-			lwg("switch...pass the encrypted block %u\n", (uint32_t) sector);
-			arm_smccc_smc(ENIGMA_SMC_CALL, req_op(rq), (uint32_t) sector, 0x0,
-						  0x0, 0x0, 0x0, 0x0,
+			lwg("switch...dev_id [%d], op [%d], sector = %x, e_block %x\n", dev_id, req_op(rq), (uint32_t)sector, (uint32_t) e_block);
+			arm_smccc_smc(ENIGMA_SMC_CALL, req_op(rq), (uint32_t) e_block, dev_id,	0x0, 0x0, 0x0, 0x0,
 						  &res);
-			lwg("get res = %lx, %lx, %lx, %lx\n", res.a0, res.a1, res.a2, res.a3);
-			decrypt_btt_entry(&e_block);
-			if (e_block != sector) {
-				/* possible cause is cache coherence */
-				printk("lwg:%s:%d: decryption failed...[%llx] != [%llx]", __func__, __LINE__, e_block, sector);
-				udelay(10);
+			lwg("get res = %x, %lx, %lx, %lx\n", res.a0, res.a1, res.a2, res.a3);
+			/*decrypt_btt_entry(&e_block);*/
+			e_block = res.a0;
+			update_btt(dev_id, (btt_e)sector, e_block);
+			/* if it's read and returns NULL_BLK -- means the block has not been written before, safe to return 0 */
+			if (e_block == NULL_BLK) {
+				sector = 0;
+			} else {
+				sector = e_block;
 			}
-			/*sector = e_block;*/
-			/*sector = res.a0;*/
-			/*sector = 0;*/
 		}
 	}
+	/* --- lwg: below is the trusted part where we emulate the in-TZ disk driver ---- */
 	loff_t pos = (sector << 9) + lo->lo_offset;
 	/*
 	 * lo_write_simple and lo_read_simple should have been covered
@@ -613,7 +609,6 @@ static int do_req_filebacked(struct loop_device *lo, struct request *rq)
 	 * run flush_dcache_page().
 	 */
 
-	/* --- lwg: below is the trusted part where we emulate the in-TZ disk driver ---- */
 	switch (req_op(rq)) {
 	case REQ_OP_FLUSH:
 		return lo_req_flush(lo, rq);
@@ -1803,7 +1798,6 @@ static void loop_handle_cmd(struct loop_cmd *cmd)
 		cmd->ret = ret ? -EIO : 0;
 		blk_mq_complete_request(cmd->rq);
 		struct request_queue *rq = lo->lo_queue;
-		lwg("cmd completed...ret = %ld, pending = %d\n", cmd->ret, rq->nr_pending);
 	}
 }
 

@@ -3027,7 +3027,7 @@ sector_t generic_block_bmap(struct address_space *mapping, sector_t block,
 }
 EXPORT_SYMBOL(generic_block_bmap);
 
-static void end_bio_bh_io_sync(struct bio *bio)
+void end_bio_bh_io_sync(struct bio *bio)
 {
 	struct buffer_head *bh = bio->bi_private;
 
@@ -3037,6 +3037,7 @@ static void end_bio_bh_io_sync(struct bio *bio)
 	bh->b_end_io(bh, !bio->bi_status);
 	bio_put(bio);
 }
+EXPORT_SYMBOL(end_bio_bh_io_sync);
 
 /*
  * This allows us to do IO even on the odd last sectors

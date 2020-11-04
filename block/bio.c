@@ -572,7 +572,6 @@ inline int bio_phys_segments(struct request_queue *q, struct bio *bio)
 {
 	if (unlikely(!bio_flagged(bio, BIO_SEG_VALID))) {
 		blk_recount_segments(q, bio);
-		printk("lwg:%s:%d:hit\n", __func__, __LINE__);
 	}
 
 	return bio->bi_phys_segments;

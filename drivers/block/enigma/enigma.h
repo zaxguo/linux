@@ -16,10 +16,11 @@
 
 #define lwg(fmt, ...) printk("lwg:%s:%d: " fmt, __func__, __LINE__, ##__VA_ARGS__);
 
-typedef loff_t btt_e;
+/* 4-byte unsigned int */
+typedef uint32_t btt_e;
 
 struct enigma_cb {
-	loff_t *btt[LOOP_DEV_NUM];
+	btt_e *btt[LOOP_DEV_NUM];
 	struct crypto_skcipher *cipher;
 };
 
@@ -33,6 +34,7 @@ extern struct enigma_cb enigma_cb;
 int init_btt_for_device(int lo_number);
 btt_e *alloc_btt(unsigned long size);
 int free_btt(btt_e *btt);
+int update_btt(int dev_id, btt_e vblk, btt_e eblk);
 int init_enigma_cb(void);
 int decrypt_btt_entry(btt_e *btt);
 int lookup_block(int lo, btt_e vblock, struct lookup_result *re);
