@@ -8,7 +8,8 @@ from kde_fit import init_kde
 from enum import Enum
 
 class app(Enum):
-    VIDEO = 0
+    VIDEO    = 0
+    ROSBAG   = 1
 
 
 
@@ -64,6 +65,9 @@ class fs:
 
 
     def __str__(self):
+        return "[fs: %d, gen: %d, timer = %d, clock = %d, parent = %d]" % (self.id, self.gen, self.timer, self.clock, self.parent)
+
+    def __repr__(self):
         return "[fs: %d, gen: %d, timer = %d, clock = %d, parent = %d]" % (self.id, self.gen, self.timer, self.clock, self.parent)
 
     def __eq__(self, other):
@@ -137,11 +141,12 @@ class fs:
 
     def rename(self, fs_list):
         global rename_ts, rename_count
-        rename_ts[self.gen][self.clock] = []
+        #rename_ts[self.gen][self.clock] = []
         rename_count += 1
         _c = self.get_color()
+        print("[rename]:", fs_list)
         for fs in fs_list:
-            rename_ts[self.gen][self.clock].append(fs.id)
+            #rename_ts[self.gen][self.clock].append(fs.id)
             fs.reset_timer()
             fs.add_to_probable(fs_list)
             self.plt.plot(self.clock, fs.id, marker = '|', c = _c, markersize=10, lw=2);
@@ -182,7 +187,7 @@ class fs:
         self.timer -= 1
         self.age   += 1
         if self.timer == 0:
-            #print("FS [" + str(self.id) + "] timed out!")
+            print("FS [" + str(self.id) + "] timed out!")
             self.reset_timer()
             rename_fs = self.can_rename()
             if rename_fs is not None:
@@ -194,15 +199,21 @@ class fs:
 
     def write(self, cnt):
         self.written += cnt
+        # triggers block allocation
         if self.written > sector_size:
+            written = self.written
+            new_blks = int(written / sector_size)
+            assert (new_blks >= 1), "Not triggering block allocation! Bug..."
+            remaining = written % sector_size
             gens[self.curr_gen()].remove(self)
-            self.gen += 1
+            self.gen += new_blks
             if self.curr_gen() not in gens.keys():
                 gens[self.curr_gen()] = [self]
             else:
                 gens[self.curr_gen()].append(self)
             #print("gens size: ", len(gens))
-            self.written -= sector_size
+            #self.written -= sector_size
+            self.written = remaining
             #print("fs[" + str(self.id) + "]-> gen[" + str(self.gen) + "]")
             if self.plt is not None:
                 self.plt.plot(self.clock, self.id, marker = 'o', color = colors[self.gen % len(colors)]);
@@ -228,12 +239,16 @@ def retire():
     # first get rid of all s2
     for i in range(len(s2)):
         s3  = s3.union(s2[i])
+        assert (len(s1[i]) >= 1), "Empty S1!!!"
         s2[i].clear()
         # get as much as possible fs from s1
         while len(s1[i]) > 1:
             s3.add(s1[i].pop())
+        # S3 = S3 - S1
+        s3 = s3.difference(s1[i])
+
     num = _retire(s3)
-    print("retired ", num, "fses!")
+    print("retired ", num, "fses:", s3)
     print("remaining: ", len(s1), "fses...")
     print(s1)
     return
@@ -255,7 +270,7 @@ def disk_sim(tick, traces, fses, plt):
             retire()
 
 # initialize file trace for video analytics
-def init_video_analytics_trace():
+def init_video_analytics_trace(sample_size):
     kde = init_kde('bus')
     # sampled interval
     interval = kde.sample(sample_size).astype(int)
@@ -275,11 +290,26 @@ def init_video_analytics_trace():
     #samples.append(sample * append_size)
     return (sample * append_size)
 
+def init_rosbag_trace(sample_size):
+    trace_file = '/home/liwei/Documents/research/enigma_logs/rosbag/test.log'
+    f = open(trace_file, 'r')
+    trace_lib = []
+    sample = []
+    for line in f:
+        trace_lib.append(int(line.split(',')[-1]))
+    for i in range(sample_size):
+        sample.append(random.choice(trace_lib))
+    return sample
+
+
 def init_file_trace(n_traces, app):
-    funcs = {app.VIDEO: init_video_analytics_trace}
+    funcs = {
+            app.VIDEO: init_video_analytics_trace,
+            app.ROSBAG: init_rosbag_trace
+            }
     trace_init_one = funcs[app]
     for i in range(n_traces):
-        sample = trace_init_one()
+        sample = trace_init_one(sample_size)
         samples.append(sample)
         print(samples[i])
     return samples
@@ -314,6 +344,7 @@ if __name__ == '__main__':
 
     fses = init_genesis_fs(n_sbd)
     traces = init_file_trace(trace_count, app.VIDEO)
+    #traces = init_file_trace(trace_count, app.ROSBAG)
     disk_sim(sample_size, traces, fses, plt)
     print("rename:", rename_ts)
 
