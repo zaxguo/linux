@@ -571,30 +571,36 @@ static int do_req_filebacked(struct loop_device *lo, struct request *rq)
 
 	if (has_btt_for_device(dev_id)) {
 		/* TODO: unclear why there are requests w/ sector = -1 */
-		if (sector != -1) {
-			btt_e e_block;
-			int err;
-			struct lookup_result result;
-			err = lookup_block(dev_id, sector, &result);
-			if (err) {
-				/* TODO: Error handling */
-			}
-			/* an encrypted block */
-			e_block = result.block;
-			struct arm_smccc_res res;
-			lwg("switch...dev_id [%d], op [%d], sector = %x, e_block %x\n", dev_id, req_op(rq), (uint32_t)sector, (uint32_t) e_block);
-			arm_smccc_smc(ENIGMA_SMC_CALL, req_op(rq), (uint32_t) e_block, dev_id,	0x0, 0x0, 0x0, 0x0,
-						  &res);
-			lwg("get res = %x, %lx, %lx, %lx\n", res.a0, res.a1, res.a2, res.a3);
-			/*decrypt_btt_entry(&e_block);*/
-			e_block = res.a0;
+		if (sector == -1) {
+			dump_stack();
+			return -1;
+		}
+
+		btt_e e_block;
+		int err;
+		struct lookup_result result;
+		err = lookup_block(dev_id, sector, &result);
+		if (err) {
+			/* TODO: Error handling */
+		}
+		/* an encrypted block */
+		e_block = result.block;
+		struct arm_smccc_res res;
+		lwg("switch...dev_id [%d], op [%d], sector = %x, e_block %x\n", dev_id, req_op(rq), (uint32_t)sector, (uint32_t) e_block);
+		arm_smccc_smc(ENIGMA_SMC_CALL, req_op(rq), (uint32_t) e_block, dev_id,	0x0, 0x0, 0x0, 0x0, &res);
+		lwg("get res = %x, %lx, %lx, %lx\n", res.a0, res.a1, res.a2, res.a3);
+		/*decrypt_btt_entry(&e_block);*/
+		e_block = res.a0;
+		/* only writes update btt */
+		if (req_op(rq) == REQ_OP_WRITE) {
+			lwg("update btt...");
 			update_btt(dev_id, (btt_e)sector, e_block);
-			/* if it's read and returns NULL_BLK -- means the block has not been written before, safe to return 0 */
-			if (e_block == NULL_BLK) {
-				sector = 0;
-			} else {
-				sector = e_block;
-			}
+		}
+		/* if it's read and returns NULL_BLK -- means the block has not been written before, safe to return 0 */
+		if (e_block == NULL_BLK) {
+			sector = 0;
+		} else {
+			sector = e_block;
 		}
 	}
 	/* --- lwg: below is the trusted part where we emulate the in-TZ disk driver ---- */
