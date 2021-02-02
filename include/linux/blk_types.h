@@ -140,6 +140,8 @@ struct bio {
 				 * throttling rules. Don't do it again. */
 #define BIO_TRACE_COMPLETION 10	/* bio_endio() should trace the final completion
 				 * of this bio. */
+/* lwg: enigma filedata path */
+#define BIO_FILEDATA		11
 /* See BVEC_POOL_OFFSET below before adding new flags */
 
 /*

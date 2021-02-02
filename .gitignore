@@ -39,9 +39,10 @@
 *.symtypes
 *.tar
 *.xz
+*.pyc
 Module.symvers
 modules.builtin
-
+flags
 #
 # Top-level generic files
 #

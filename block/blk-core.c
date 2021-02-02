@@ -1432,6 +1432,7 @@ static struct request *blk_old_get_request(struct request_queue *q,
 	rq->__data_len = 0;
 	rq->__sector = (sector_t) -1;
 	rq->bio = rq->biotail = NULL;
+	/*printk("lwg:%s:%d:hit...\n", __func__, __LINE__);*/
 	return rq;
 }
 
@@ -2324,10 +2325,14 @@ blk_qc_t submit_bio(struct bio *bio)
 		/* need to split bio if it is loop device */
 		if (!strncmp("loop", disk->disk_name, 4)) {
 			struct request_queue *q = disk->queue;
-			printk("lwg:%s:%d:submitting bio to loop, sectors = %d, fn = %pf, end_io = %pf\n",
+			struct page *page = bio_page(bio);
+			int is_user = test_bit(PG_user, &page->flags);
+			printk("lwg:%s:%d:submitting bio to loop, sectors = %d, is_user = %d\n",
 					__func__, __LINE__, bio_sectors(bio),
-					q->make_request_fn, bio->bi_end_io);
+					/*q->make_request_fn, bio->bi_end_io,*/
+					is_user);
 			if (bio_sectors(bio) == 1) {
+				/*bio_set_flag(bio, BIO_FILEDATA);*/
 				goto normal;
 			}
 #if 1
@@ -2342,18 +2347,23 @@ blk_qc_t submit_bio(struct bio *bio)
 			bio_end_io_t *end_io = bio->bi_end_io;
 			void *priv;
 			if (end_io == end_bio_bh_io_sync) {
-				priv = bio->bi_private;	
+				priv = bio->bi_private;
 			}
+			/* split bio into sectors */
 			do {
 				/* the function cannot take linked bio! */
 				struct bio* tmp = bio_clone_bioset(iter, 0, 0);
 
 				tmp->bi_next = NULL;
-				tmp->bi_io_vec->bv_offset = (count++) << 9;
+				/* offset within a page */
+				tmp->bi_io_vec->bv_offset = ( (count++) & 0x7 ) << 9;
+				/* fixed sector size */
 				tmp->bi_io_vec->bv_len = (1) << 9;
 				iter = iter->bi_next;
-				/* we reach the last bio, configure end_io notification */
-				if (iter == head) {
+				/* upon the last bio (assumed to be every 8th bio) of the page,
+				 * we configure end_io notification */
+				/*if (iter == head) {*/
+				if ((count & 0x7) == 0 || iter == head) {
 					tmp->bi_end_io = end_io;
 					/* notification delivery */
 					if (priv) {
@@ -2361,10 +2371,10 @@ blk_qc_t submit_bio(struct bio *bio)
 					}
 				}
 				ret = generic_make_request(tmp);
-				dump_single_bio(tmp);
+				/*dump_single_bio(tmp);*/
 			} while(head && iter != head);
-			WARN_ON(count > 8);
-			printk("lwg:%s:%d:finish submitting bio..\n", __func__, __LINE__);
+			/*WARN_ON(count > 8);*/
+			/*printk("lwg:%s:%d:finish splitting & submitting %d bios..\n", __func__, __LINE__, count);*/
 			return ret;
 #endif
 		}

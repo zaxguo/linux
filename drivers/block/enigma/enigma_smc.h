@@ -16,6 +16,7 @@
  * */
 
 #define NULL_BLK	((uint32_t)-1)
+#define FILEDATA	((uint32_t)-2)
 /* from linux/blk_types.h, add _ to avoid redeclaration */
 enum _req_opf {
 	/* read sectors from the device */
@@ -37,6 +38,9 @@ enum _req_opf {
 	/* write the zero filled sector many times */
 	_REQ_OP_WRITE_ZEROES	= 9,
 
+	/* increment block ref count in TEE */
+	_REQ_OP_INC_REF = 10,
+
 	/* SCSI passthrough using struct scsi_request */
 	_REQ_OP_SCSI_IN		= 32,
 	_REQ_OP_SCSI_OUT		= 33,
@@ -50,6 +54,8 @@ enum _req_opf {
 /* lwg: the calling convention of SMC */
 #define ENIGMA_RD	_REQ_OP_READ
 #define ENIGMA_WR	_REQ_OP_WRITE
+#define ENIGMA_INCR _REQ_OP_INC_REF
+
 #define ENIGMA_SMC_CALL \
 	OPTEE_SMC_STD_CALL_VAL(0) // the "0" marks it is our SMC
 

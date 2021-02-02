@@ -7,7 +7,7 @@
 #include "enigma_smc.h"
 #include "../../drivers/tee/optee/optee_smc.h"
 
-#define BTT_SIZE (30001)
+#define BTT_SIZE (6001)
 #define BTT_ENTRY_SIZE (sizeof(btt_e))
 #define LOOP_DEV_NUM	10
 
@@ -32,6 +32,7 @@ struct lookup_result {
 extern struct enigma_cb enigma_cb;
 
 int init_btt_for_device(int lo_number);
+int copy_btt(int from, int to);
 btt_e *alloc_btt(unsigned long size);
 int free_btt(btt_e *btt);
 int update_btt(int dev_id, btt_e vblk, btt_e eblk);
@@ -52,7 +53,7 @@ static inline btt_e *get_btt_for_device(int lo_number) {
 }
 
 static inline int pblk_allocated(btt_e pblock) {
-	return (pblock != NULL_BLK);
+	return (pblock != NULL_BLK) && (pblock != FILEDATA);
 }
 
 #endif

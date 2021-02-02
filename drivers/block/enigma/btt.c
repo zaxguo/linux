@@ -8,6 +8,7 @@
 #include <linux/random.h>
 #include "enigma.h"
 #include "enigma_types.h"
+#include "enigma_smc.h"
 
 
 #define NEEDS_ENDEC		0
@@ -77,7 +78,7 @@ static int _update_btt(btt_e *btt, btt_e vblk, btt_e e_blk) {
 }
 
 int update_btt(int dev_id, btt_e vblk, btt_e e_blk) {
-	lwg("update [%d]: [%x] -> [%x]\n", dev_id, vblk, e_blk);
+	lwg("update [%d]: [%d] -> [%x]\n", dev_id, vblk, e_blk);
 	btt_e *btt = get_btt_for_device(dev_id);
 	return _update_btt(btt, vblk, e_blk);
 }
@@ -174,18 +175,42 @@ int lookup_block(int lo, btt_e vblock, struct lookup_result *re) {
 	}
 #endif
 	re->block = pblock;
-	/* TODO: xxx
+	/* TODO: remove
 	 * Normal world does not if it is shared or not */
 	re->shared = false;
 	return 0;
 }
 
+static inline void incr_blk_ref(btt_e pblk) {
+	struct arm_smccc_res res;
+	arm_smccc_smc(ENIGMA_SMC_CALL, ENIGMA_INCR, (uint32_t) pblk, 0x0, 0x0, 0x0, 0x0, 0x0, &res);
+}
+
+
+/* copy btt to another device */
+int copy_btt(int from, int to) {
+	int i;
+	btt_e *from_btt = get_btt_for_device(from);
+	btt_e *to_btt = get_btt_for_device(to);
+	memcpy(to_btt, from_btt, BTT_SIZE * sizeof(btt_e));
+	for (i = 0; i < (int)BTT_SIZE; i++) {
+		btt_e pblk = to_btt[i];
+		if (pblk_allocated(pblk)) {
+			incr_blk_ref(pblk);
+		}
+	}
+	lwg("copied btt from [%d] to [%d]\n", from, to);
+	return 0;
+}
+
+
+
 int init_enigma_cb (void) {
 	int ret;
 	struct enigma_cb* cb = &enigma_cb;
 	ret = init_enigma_crypto(&cb->cipher);
-	printk("enigma_cb initialized tfm -- %p\n", enigma_cb.cipher);
-	printk(KERN_INFO "lwg: enigma cb initialized..\n");
+	lwg("enigma_cb initialized tfm -- %p\n", enigma_cb.cipher);
+	lwg("enigma cb initialized..\n");
 	return 0;
 }
 

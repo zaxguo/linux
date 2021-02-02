@@ -425,6 +425,8 @@ struct request *blk_mq_alloc_request(struct request_queue *q, unsigned int op,
 
 	rq->__data_len = 0;
 	rq->__sector = (sector_t) -1;
+	/* lwg: interesting.. */
+	printk("lwg:%s:%d:we were here to request a -1 read -------------\n", __func__, __LINE__);
 	rq->bio = rq->biotail = NULL;
 	return rq;
 }

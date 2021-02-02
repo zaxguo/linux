@@ -273,6 +273,12 @@ static int lo_write_bvec(struct file *file, struct bio_vec *bvec, loff_t *ppos)
 
 	iov_iter_bvec(&i, ITER_BVEC | WRITE, bvec, 1, bvec->bv_len);
 
+	struct page *pg = bvec->bv_page;
+	int is_user = test_bit(PG_user, &pg->flags);
+	if (is_user) {
+		printk("lwg:%s:%d:executing a user write...\n", __func__, __LINE__);
+	}
+
 	file_start_write(file);
 	bw = vfs_iter_write(file, &i, ppos, 0);
 	file_end_write(file);
@@ -562,6 +568,30 @@ static int lo_rw_aio(struct loop_device *lo, struct loop_cmd *cmd,
 	return 0;
 }
 
+/* update btt only when actual allocation happens inside tz, satisfying two conditions:
+ * 1: must be a write;
+ * 2: returned block is not NULL_BLK or FILEDATA 
+ * */
+static inline int need_update_btt(struct request *rq, btt_e tz_block) {
+	if (req_op(rq) == REQ_OP_WRITE) {
+		return 1;
+		/*if (tz_block != NULL_BLK && tz_block != FILEDATA) {*/
+			/*return 1;*/
+		/*}*/
+	}
+	return 0;
+}
+
+static inline int is_filedata_rq(struct request *rq) {
+	struct bio *bio = rq->bio;
+	struct page *pg;
+	WARN_ON(!bio);
+	pg = bio_page(bio);
+	return test_bit(PG_user, &pg->flags);
+}
+
+
+
 static int do_req_filebacked(struct loop_device *lo, struct request *rq)
 {
 	struct loop_cmd *cmd = blk_mq_rq_to_pdu(rq);
@@ -570,12 +600,12 @@ static int do_req_filebacked(struct loop_device *lo, struct request *rq)
 	loff_t sector = blk_rq_pos(rq);
 
 	if (has_btt_for_device(dev_id)) {
-		/* TODO: unclear why there are requests w/ sector = -1 */
+		/* TODO: unclear why there are requests w/ sector = -1
+		 * lwg: the answer is the op is a FLUSH command, sector = -1 with data_len = 0 */
 		if (sector == -1) {
-			dump_stack();
-			return -1;
+			lwg("special op: sector = %lx, len = %d, op = %d\n", sector, rq->__data_len, req_op(rq));
+			goto handle_op;
 		}
-
 		btt_e e_block;
 		int err;
 		struct lookup_result result;
@@ -585,23 +615,50 @@ static int do_req_filebacked(struct loop_device *lo, struct request *rq)
 		}
 		/* an encrypted block */
 		e_block = result.block;
+
+		if (is_filedata_rq(rq)) {
+			e_block = FILEDATA;
+		}
 		struct arm_smccc_res res;
-		lwg("switch...dev_id [%d], op [%d], sector = %x, e_block %x\n", dev_id, req_op(rq), (uint32_t)sector, (uint32_t) e_block);
+		lwg("switch:[%d:%d]:[%d ==> %x]\n",
+				dev_id,
+				req_op(rq),
+				(uint32_t)sector,
+				(uint32_t) e_block)
 		arm_smccc_smc(ENIGMA_SMC_CALL, req_op(rq), (uint32_t) e_block, dev_id,	0x0, 0x0, 0x0, 0x0, &res);
-		lwg("get res = %x, %lx, %lx, %lx\n", res.a0, res.a1, res.a2, res.a3);
+
+		mdelay(1);
+		/* -----------lwg: the following is 'emulated' disk ops in tz ------------
+		 * -----------     it is considered to be part of our TCB  --------------*/
+		lwg("get res = %lx, %lx, %lx, %lx\n", res.a0, res.a1, res.a2, res.a3);
+
 		/*decrypt_btt_entry(&e_block);*/
 		e_block = res.a0;
-		/* only writes update btt */
-		if (req_op(rq) == REQ_OP_WRITE) {
-			lwg("update btt...");
+
+
+		/* TODO: update as directed by TZ not on all write */
+		if (need_update_btt(rq, e_block)) {
 			update_btt(dev_id, (btt_e)sector, e_block);
 		}
-		/* if it's read and returns NULL_BLK -- means the block has not been written before, safe to return 0 */
+
+		/* the following code rejects rogue read & discard filedata write:
+		 * initially, all blocks' btt entries are NULL_BLK -- read will return sector 0, reserved for all 0's
+		 * write to these blocks must come with e_block of FILEDATA -- this goes to the 2nd branch which directly returns
+		 * subsequent read to these filedata blocks will also go to the 2nd branch which directly returns/omitted */
+
 		if (e_block == NULL_BLK) {
+			/* reserve sector 0 for all 0's */
 			sector = 0;
+		} if (e_block == FILEDATA) {
+		/* write path
+		 * must deal with print_req_error!  */
+			int bytes = blk_rq_bytes(rq);
+			lwg("filedata, ommitting %d bytes..\n", bytes);
+			return 0;
 		} else {
 			sector = e_block;
 		}
+
 	}
 	/* --- lwg: below is the trusted part where we emulate the in-TZ disk driver ---- */
 	loff_t pos = (sector << 9) + lo->lo_offset;
@@ -615,6 +672,7 @@ static int do_req_filebacked(struct loop_device *lo, struct request *rq)
 	 * run flush_dcache_page().
 	 */
 
+handle_op:
 	switch (req_op(rq)) {
 	case REQ_OP_FLUSH:
 		return lo_req_flush(lo, rq);
@@ -1012,6 +1070,10 @@ static int loop_set_fd(struct loop_device *lo, fmode_t mode,
 	/* add BTT when loop device is added */
 	if (has_enigma_cb()) {
 		init_btt_for_device(lo->lo_number);
+	}
+	/* dirty */
+	if (lo->lo_number == 1) {
+		copy_btt(0, 1);
 	}
 	return 0;
 
