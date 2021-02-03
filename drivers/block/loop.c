@@ -83,6 +83,7 @@
 #include <linux/buffer_head.h>
 
 #include <linux/uaccess.h>
+#include <linux/proc_fs.h>
 
 static DEFINE_IDR(loop_index_idr);
 static DEFINE_MUTEX(loop_index_mutex);
@@ -2127,6 +2128,33 @@ static const struct file_operations loop_ctl_fops = {
 	.llseek		= noop_llseek,
 };
 
+static int enigma_dbg_show(struct seq_file *s, void *unused) {
+	char *btt_path = "/tmp/btt";
+	struct file *btt_f = filp_open(btt_path, O_RDWR | O_CREAT, 0);
+	int i, err;
+	loff_t pos = 0;
+	for (i = 0; i < BTT_SIZE; i++) {
+		void *entry = kmalloc(128, GFP_KERNEL);
+		struct lookup_result result;
+		err = lookup_block(0, i, &result);
+		snprintf(entry, 128, "%d,%d\n", i, result.block);
+		kernel_write(btt_f, entry, strlen(entry), &pos);
+	}
+	printk("btt dumped to %s\n", btt_path);
+	return 0;
+}
+
+static int enigma_dbg_open(struct inode *inode, struct file *file) {
+	return single_open(file, enigma_dbg_show, inode->i_private);
+}
+
+static const struct file_operations enigma_dbg_ops = {
+	.open = enigma_dbg_open,
+	.read= seq_read,
+	.llseek = seq_lseek,
+	.release = single_release,
+};
+
 static struct miscdevice loop_misc = {
 	.minor		= LOOP_CTRL_MINOR,
 	.name		= "loop-control",
@@ -2185,6 +2213,9 @@ static int __init loop_init(void)
 	}
 
 	err = misc_register(&loop_misc);
+
+	proc_create("enigma_dbg", 0, NULL, &enigma_dbg_ops);
+
 	if (err < 0)
 		goto err_out;
 
