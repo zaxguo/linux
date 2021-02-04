@@ -2318,6 +2318,8 @@ static unsigned int get_bio_offset(struct bio* bio) {
 }
 
 extern void end_bio_bh_io_sync(struct bio *bio);
+extern void submit_bio_wait_endio(struct bio* bio);
+
 blk_qc_t submit_bio(struct bio *bio)
 {
 	/*
@@ -2332,28 +2334,32 @@ blk_qc_t submit_bio(struct bio *bio)
 			struct request_queue *q = disk->queue;
 			struct page *page = bio_page(bio);
 			int is_user = test_bit(PG_user, &page->flags);
-			printk("lwg:%s:%d:submitting bio to loop, sectors = %d, is_user = %d\n",
+			printk("lwg:%s:%d:submitting bio to loop, sectors = %d, is_user = %d, op = %x\n",
 					__func__, __LINE__, bio_sectors(bio),
-					/*q->make_request_fn, bio->bi_end_io,*/
-					is_user);
-			/* TODO: handle multi-page (i.e. multi-seg) bio */
-			if (bio_sectors(bio) > 8) {
-				WARN_ON(1);
-				dump_single_bio(bio);
-			}
-
-#if 0
-			if (bio_sectors(bio) == 2) {
-				struct bio_vec *bvec = &bio->bi_io_vec[bio->bi_vcnt - 1];
-				printk("vcnt = %d, offset = %d\n", bio->bi_vcnt, bvec->bv_offset);
-				dump_single_bio(bio);
-				dump_stack();
-			}
-#endif 
+					is_user,
+					bio_op(bio));
 			if (bio_sectors(bio) == 1) {
 				/*bio_set_flag(bio, BIO_FILEDATA);*/
 				goto normal;
 			}
+			/* TODO: handle multi-page (i.e. multi-seg) bio */
+			if (bio_sectors(bio) > 8) {
+				WARN_ON(1);
+				dump_single_bio(bio);
+				struct bvec_iter iter;
+				struct bio_vec bvec;
+				unsigned int i = 0;
+				bio_for_each_segment(bvec, bio, iter) {
+					bool is_last = bio_iter_last(bvec, iter);
+					printk("lwg:%s:%d:last=%d, off=%x, page=%p, sector= %lx\n",
+							__func__, __LINE__, is_last,
+							bvec.bv_offset, bio->bi_io_vec[i].bv_page,
+						    iter.bi_sector
+							);
+					i++;
+				}
+			}
+
 #if 1
 			/* this is wrong -- cannot clone bio */
 			/* donot modify original one */
@@ -2367,6 +2373,9 @@ blk_qc_t submit_bio(struct bio *bio)
 			bio_end_io_t *end_io = bio->bi_end_io;
 			void *priv;
 			if (end_io == end_bio_bh_io_sync) {
+				priv = bio->bi_private;
+			}
+			if (end_io == submit_bio_wait_endio) {
 				priv = bio->bi_private;
 			}
 			/* split bio into sectors */

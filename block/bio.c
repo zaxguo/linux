@@ -926,13 +926,14 @@ struct submit_bio_ret {
 	int error;
 };
 
-static void submit_bio_wait_endio(struct bio *bio)
+void submit_bio_wait_endio(struct bio *bio)
 {
 	struct submit_bio_ret *ret = bio->bi_private;
 
 	ret->error = blk_status_to_errno(bio->bi_status);
 	complete(&ret->event);
 }
+EXPORT_SYMBOL_GPL(submit_bio_wait_endio);
 
 /**
  * submit_bio_wait - submit a bio, and wait until it completes
