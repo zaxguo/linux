@@ -2312,6 +2312,11 @@ extern void mpage_end_io(struct bio *bio);
  *
  */
 
+static unsigned int get_bio_offset(struct bio* bio) {
+	struct bio_vec *bvec = &bio->bi_io_vec[bio->bi_vcnt - 1];
+	return bvec->bv_offset;
+}
+
 extern void end_bio_bh_io_sync(struct bio *bio);
 blk_qc_t submit_bio(struct bio *bio)
 {
@@ -2331,6 +2336,20 @@ blk_qc_t submit_bio(struct bio *bio)
 					__func__, __LINE__, bio_sectors(bio),
 					/*q->make_request_fn, bio->bi_end_io,*/
 					is_user);
+			/* TODO: handle multi-page (i.e. multi-seg) bio */
+			if (bio_sectors(bio) > 8) {
+				WARN_ON(1);
+				dump_single_bio(bio);
+			}
+
+#if 0
+			if (bio_sectors(bio) == 2) {
+				struct bio_vec *bvec = &bio->bi_io_vec[bio->bi_vcnt - 1];
+				printk("vcnt = %d, offset = %d\n", bio->bi_vcnt, bvec->bv_offset);
+				dump_single_bio(bio);
+				dump_stack();
+			}
+#endif 
 			if (bio_sectors(bio) == 1) {
 				/*bio_set_flag(bio, BIO_FILEDATA);*/
 				goto normal;
@@ -2340,6 +2359,7 @@ blk_qc_t submit_bio(struct bio *bio)
 			/* donot modify original one */
 			struct bio* iter, *head;
 			struct bio* test = bio_clone_fast(bio, 0, 0);
+			unsigned int offset = get_bio_offset(bio);
 			head = enigma_split_bio(test);
 			int count = 0;
 			iter = head;
@@ -2353,16 +2373,15 @@ blk_qc_t submit_bio(struct bio *bio)
 			do {
 				/* the function cannot take linked bio! */
 				struct bio* tmp = bio_clone_bioset(iter, 0, 0);
-
 				tmp->bi_next = NULL;
-				/* offset within a page */
-				tmp->bi_io_vec->bv_offset = ( (count++) & 0x7 ) << 9;
+				/* offset within a page 
+				 * Note: bio submitted by buffer_head does not necessarily start from 0 */
+				tmp->bi_io_vec->bv_offset = offset + (((count++) & 0x7 ) << 9);
 				/* fixed sector size */
 				tmp->bi_io_vec->bv_len = (1) << 9;
 				iter = iter->bi_next;
 				/* upon the last bio (assumed to be every 8th bio) of the page,
 				 * we configure end_io notification */
-				/*if (iter == head) {*/
 				if ((count & 0x7) == 0 || iter == head) {
 					tmp->bi_end_io = end_io;
 					/* notification delivery */
@@ -2371,10 +2390,8 @@ blk_qc_t submit_bio(struct bio *bio)
 					}
 				}
 				ret = generic_make_request(tmp);
-				/*dump_single_bio(tmp);*/
+				dump_single_bio(tmp);
 			} while(head && iter != head);
-			/*WARN_ON(count > 8);*/
-			/*printk("lwg:%s:%d:finish splitting & submitting %d bios..\n", __func__, __LINE__, count);*/
 			return ret;
 #endif
 		}
