@@ -2351,10 +2351,12 @@ blk_qc_t submit_bio(struct bio *bio)
 				unsigned int i = 0;
 				bio_for_each_segment(bvec, bio, iter) {
 					bool is_last = bio_iter_last(bvec, iter);
-					printk("lwg:%s:%d:last=%d, off=%x, page=%p, sector= %lx\n",
+					printk("lwg:%s:%d:last=%d, off=%x, page=%p, sector= %lx, end_io=%pf, priv= %p\n",
 							__func__, __LINE__, is_last,
 							bvec.bv_offset, bio->bi_io_vec[i].bv_page,
-						    iter.bi_sector
+						    iter.bi_sector,
+							bio->bi_end_io,
+							bio->bi_private
 							);
 					i++;
 				}
@@ -2391,7 +2393,9 @@ blk_qc_t submit_bio(struct bio *bio)
 				iter = iter->bi_next;
 				/* upon the last bio (assumed to be every 8th bio) of the page,
 				 * we configure end_io notification */
-				if ((count & 0x7) == 0 || iter == head) {
+				/* TODO:refactor bio splitting strategy into seg-based..*/
+				/*if ((count & 0x7) == 0 || iter == head) {*/
+				if (iter == head) {
 					tmp->bi_end_io = end_io;
 					/* notification delivery */
 					if (priv) {
