@@ -2334,6 +2334,7 @@ blk_qc_t submit_bio(struct bio *bio)
 			struct request_queue *q = disk->queue;
 			struct page *page = bio_page(bio);
 			int is_user = test_bit(PG_user, &page->flags);
+			bool is_mpage = false;
 			printk("lwg:%s:%d:submitting bio to loop, sectors = %d, is_user = %d, op = %x\n",
 					__func__, __LINE__, bio_sectors(bio),
 					is_user,
@@ -2342,7 +2343,8 @@ blk_qc_t submit_bio(struct bio *bio)
 				/*bio_set_flag(bio, BIO_FILEDATA);*/
 				goto normal;
 			}
-			/* TODO: handle multi-page (i.e. multi-seg) bio */
+#if 0
+			/* lwg: multi-seg bio debug, turn on when necessary */
 			if (bio_sectors(bio) > 8) {
 				WARN_ON(1);
 				dump_single_bio(bio);
@@ -2361,6 +2363,7 @@ blk_qc_t submit_bio(struct bio *bio)
 					i++;
 				}
 			}
+#endif 
 
 #if 1
 			/* this is wrong -- cannot clone bio */
@@ -2374,12 +2377,16 @@ blk_qc_t submit_bio(struct bio *bio)
 			blk_qc_t ret = BLK_QC_T_NONE;
 			bio_end_io_t *end_io = bio->bi_end_io;
 			void *priv;
-			if (end_io == end_bio_bh_io_sync) {
+			/*if (end_io == end_bio_bh_io_sync || end_io == submit_bio_wait_endio) {*/
+			if (end_io) {
 				priv = bio->bi_private;
-			}
-			if (end_io == submit_bio_wait_endio) {
-				priv = bio->bi_private;
-			}
+				if (end_io == mpage_end_io) {
+					is_mpage = true;
+				}
+			} 
+			/*else if (end_io == mpage_end_io) {*/
+				/*is_mpage = true;*/
+			/*}*/
 			/* split bio into sectors */
 			do {
 				/* the function cannot take linked bio! */
@@ -2393,9 +2400,12 @@ blk_qc_t submit_bio(struct bio *bio)
 				iter = iter->bi_next;
 				/* upon the last bio (assumed to be every 8th bio) of the page,
 				 * we configure end_io notification */
-				/* TODO:refactor bio splitting strategy into seg-based..*/
-				/*if ((count & 0x7) == 0 || iter == head) {*/
-				if (iter == head) {
+
+				/* lwg: there are two types of bio issued from pagecache or block layer
+				 * for the former, we need to configure notification at page boundary,
+				 * for the latter, we only need to configure at the last (chained) bio */
+				if ( (((count & 0x7) == 0) && is_mpage) ||
+						iter == head) {
 					tmp->bi_end_io = end_io;
 					/* notification delivery */
 					if (priv) {

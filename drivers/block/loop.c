@@ -601,8 +601,7 @@ static int do_req_filebacked(struct loop_device *lo, struct request *rq)
 	loff_t sector = blk_rq_pos(rq);
 
 	if (has_btt_for_device(dev_id)) {
-		/* TODO: unclear why there are requests w/ sector = -1
-		 * lwg: the answer is the op is a FLUSH command, sector = -1 with data_len = 0 */
+		 /* lwg: the op is a FLUSH command, sector = -1 with data_len = 0 */
 		if (sector == -1) {
 			lwg("special op: sector = %lx, len = %d, op = %d\n", sector, rq->__data_len, req_op(rq));
 			goto handle_op;
@@ -628,7 +627,7 @@ static int do_req_filebacked(struct loop_device *lo, struct request *rq)
 				(uint32_t) e_block)
 		arm_smccc_smc(ENIGMA_SMC_CALL, req_op(rq), (uint32_t) e_block, dev_id,	0x0, 0x0, 0x0, 0x0, &res);
 
-		mdelay(1);
+		/*mdelay(1);*/
 		/* -----------lwg: the following is 'emulated' disk ops in tz ------------
 		 * -----------     it is considered to be part of our TCB  --------------*/
 		lwg("get res = %lx, %lx, %lx, %lx\n", res.a0, res.a1, res.a2, res.a3);
