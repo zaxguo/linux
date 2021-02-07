@@ -3033,7 +3033,7 @@ again:
 		copied = iov_iter_copy_from_user_atomic(page, i, offset, bytes);
 
 		if (!strncmp(current->comm, "a.out", sizeof("a.out"))) {
-			printk("lwg:%s:%d:comm = %s, copied %d bytes\n", __func__, __LINE__, current->comm, copied);
+			printk("lwg:%s:%d:comm = %s, copied %ld bytes to page %p\n", __func__, __LINE__, current->comm, copied, page);
 			set_bit(PG_user, &page->flags);
 		}
 

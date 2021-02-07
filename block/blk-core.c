@@ -2319,6 +2319,7 @@ static unsigned int get_bio_offset(struct bio* bio) {
 
 extern void end_bio_bh_io_sync(struct bio *bio);
 extern void submit_bio_wait_endio(struct bio* bio);
+extern void ext4_end_bio(struct bio* bio);
 
 blk_qc_t submit_bio(struct bio *bio)
 {
@@ -2342,6 +2343,9 @@ blk_qc_t submit_bio(struct bio *bio)
 			if (bio_sectors(bio) == 1) {
 				/*bio_set_flag(bio, BIO_FILEDATA);*/
 				goto normal;
+			}
+			if (bio->bi_end_io == ext4_end_bio) {
+				dump_stack();
 			}
 #if 0
 			/* lwg: multi-seg bio debug, turn on when necessary */

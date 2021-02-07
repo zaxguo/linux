@@ -627,7 +627,6 @@ static int do_req_filebacked(struct loop_device *lo, struct request *rq)
 				(uint32_t) e_block)
 		arm_smccc_smc(ENIGMA_SMC_CALL, req_op(rq), (uint32_t) e_block, dev_id,	0x0, 0x0, 0x0, 0x0, &res);
 
-		/*mdelay(1);*/
 		/* -----------lwg: the following is 'emulated' disk ops in tz ------------
 		 * -----------     it is considered to be part of our TCB  --------------*/
 		lwg("get res = %lx, %lx, %lx, %lx\n", res.a0, res.a1, res.a2, res.a3);
@@ -654,6 +653,7 @@ static int do_req_filebacked(struct loop_device *lo, struct request *rq)
 		 * must deal with print_req_error!  */
 			int bytes = blk_rq_bytes(rq);
 			lwg("filedata, ommitting %d bytes..\n", bytes);
+			/*TODO: clear bit flags!!! */
 			return 0;
 		} else {
 			sector = e_block;
