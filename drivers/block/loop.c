@@ -591,6 +591,14 @@ static inline int is_filedata_rq(struct request *rq) {
 	return test_bit(PG_user, &pg->flags);
 }
 
+static inline void clear_filedata_flag(struct request *rq) {
+	struct bio *bio = rq->bio;
+	struct page *pg;
+	WARN_ON(!bio);
+	pg = bio_page(bio);
+	return clear_bit(PG_user, &pg->flags);
+}
+
 
 
 static int do_req_filebacked(struct loop_device *lo, struct request *rq)
@@ -654,6 +662,7 @@ static int do_req_filebacked(struct loop_device *lo, struct request *rq)
 			int bytes = blk_rq_bytes(rq);
 			lwg("filedata, ommitting %d bytes..\n", bytes);
 			/*TODO: clear bit flags!!! */
+			clear_filedata_flag(rq);
 			return 0;
 		} else {
 			sector = e_block;

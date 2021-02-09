@@ -1031,8 +1031,10 @@ static inline int wait_on_page_bit_common(wait_queue_head_t *q,
 
 void wait_on_page_bit(struct page *page, int bit_nr)
 {
+	printk("lwg:%s:%d:waiting on page %p\n", __func__, __LINE__, page);
 	wait_queue_head_t *q = page_waitqueue(page);
 	wait_on_page_bit_common(q, page, bit_nr, TASK_UNINTERRUPTIBLE, false);
+	printk("lwg:%s:%d:done waiting on page %p\n", __func__, __LINE__, page);
 }
 EXPORT_SYMBOL(wait_on_page_bit);
 
@@ -3033,7 +3035,7 @@ again:
 		copied = iov_iter_copy_from_user_atomic(page, i, offset, bytes);
 
 		if (!strncmp(current->comm, "a.out", sizeof("a.out"))) {
-			printk("lwg:%s:%d:comm = %s, copied %ld bytes to page %p\n", __func__, __LINE__, current->comm, copied, page);
+			printk("lwg:%s:%d:comm = %s, copied %ld bytes to page %p, offset = %ld\n", __func__, __LINE__, current->comm, copied, page, offset);
 			set_bit(PG_user, &page->flags);
 		}
 
