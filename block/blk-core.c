@@ -2337,16 +2337,18 @@ blk_qc_t submit_bio(struct bio *bio)
 			struct page *page = bio_page(bio);
 			int is_user = test_bit(PG_user, &page->flags);
 			bool is_mpage = false;
-			printk("lwg:%s:%d:submitting bio to loop, sectors = %d, is_user = %d, op = %x, page = %p, writeback = %d\n",
+			printk("lwg:%s:%d:submitting bio to loop, sectors = %d, is_user = %d, op = %x, page = %p, writeback = %d, priv = %d\n",
 					__func__, __LINE__, bio_sectors(bio),
 					is_user,
 					bio_op(bio),
 					bio_page(bio),
-					PageWriteback(bio_page(bio)));
+					PageWriteback(bio_page(bio)),
+					page_has_buffers(bio_page(bio)));
 			if (bio_sectors(bio) == 1) {
 				/*bio_set_flag(bio, BIO_FILEDATA);*/
 				goto normal;
 			}
+
 #if 0
 			/* lwg: multi-seg bio debug, turn on when necessary */
 			if (bio_sectors(bio) > 8) {
@@ -2386,12 +2388,21 @@ blk_qc_t submit_bio(struct bio *bio)
 				priv = bio->bi_private;
 				if (end_io == mpage_end_io) {
 					is_mpage = true;
+				/* tailor individual buffer_head for ext4 due to its flaw */
+				} else if (end_io == ext4_end_bio) {
+#if 0
+					struct page *pg = bio_page(bio);
+					if (page_has_buffers(pg)) {
+						struct buffer_head *bh, *head;
+						bh = head = page_buffers(pg);
+						do {
+							printk("lwg:%s:%d:bh offset = %d, blk = %ld, endio = %pf\n", __func__, __LINE__, bh_offset(bh), bh->b_blocknr, bh->b_end_io);
+							bh->b_size = 1 << 9;
+						} while((bh = bh->b_this_page) != head);
+					}
+#endif 
 				}
-			} 
-			/*else if (end_io == mpage_end_io) {*/
-				/*is_mpage = true;*/
-			/*}*/
-			/* split bio into sectors */
+			}
 			do {
 				/* the function cannot take linked bio! */
 				struct bio* tmp = bio_clone_bioset(iter, 0, 0);

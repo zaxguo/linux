@@ -100,8 +100,11 @@ static void ext4_finish_bio(struct bio *bio)
 		do {
 			if (bh_offset(bh) < bio_start ||
 			    bh_offset(bh) + bh->b_size > bio_end) {
-				if (buffer_async_write(bh))
-					under_io++;
+				if (buffer_async_write(bh)) {
+					/* lwg: dirty hack for bio w/ ext4_end_io */
+					if (bh->b_end_io)
+						under_io++;
+				}
 				continue;
 			}
 			clear_buffer_async_write(bh);
@@ -116,6 +119,8 @@ static void ext4_finish_bio(struct bio *bio)
 				fscrypt_restore_control_page(data_page);
 #endif
 			end_page_writeback(page);
+		} else {
+			printk("lwg:%s:%d:not ending page writeback for %p\n", __func__, __LINE__, page);
 		}
 	}
 }

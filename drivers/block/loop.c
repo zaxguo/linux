@@ -628,16 +628,16 @@ static int do_req_filebacked(struct loop_device *lo, struct request *rq)
 			e_block = FILEDATA;
 		}
 		struct arm_smccc_res res;
-		lwg("switch:[%d:%d]:[%d ==> %x]\n",
-				dev_id,
-				req_op(rq),
-				(uint32_t)sector,
-				(uint32_t) e_block)
+		/*lwg("switch:[%d:%d]:[%d ==> %x]\n",*/
+				/*dev_id,*/
+				/*req_op(rq),*/
+				/*(uint32_t)sector,*/
+				/*(uint32_t) e_block)*/
 		arm_smccc_smc(ENIGMA_SMC_CALL, req_op(rq), (uint32_t) e_block, dev_id,	0x0, 0x0, 0x0, 0x0, &res);
 
 		/* -----------lwg: the following is 'emulated' disk ops in tz ------------
 		 * -----------     it is considered to be part of our TCB  --------------*/
-		lwg("get res = %lx, %lx, %lx, %lx\n", res.a0, res.a1, res.a2, res.a3);
+		/*lwg("get res = %lx, %lx, %lx, %lx\n", res.a0, res.a1, res.a2, res.a3);*/
 
 		/*decrypt_btt_entry(&e_block);*/
 		e_block = res.a0;
