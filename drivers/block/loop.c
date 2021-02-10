@@ -657,11 +657,10 @@ static int do_req_filebacked(struct loop_device *lo, struct request *rq)
 			/* reserve sector 0 for all 0's */
 			sector = 0;
 		} if (e_block == FILEDATA) {
-		/* write path
-		 * must deal with print_req_error!  */
+		/* filedata path */
 			int bytes = blk_rq_bytes(rq);
-			lwg("filedata, ommitting %d bytes..\n", bytes);
-			/*TODO: clear bit flags!!! */
+			lwg("sector [%ld] filedata, ommitting %d bytes..\n", sector, bytes);
+			/* clear page bit flags in case it gets recycled */
 			clear_filedata_flag(rq);
 			return 0;
 		} else {
@@ -1081,8 +1080,8 @@ static int loop_set_fd(struct loop_device *lo, fmode_t mode,
 		init_btt_for_device(lo->lo_number);
 	}
 	/* dirty */
-	if (lo->lo_number == 1) {
-		copy_btt(0, 1);
+	if (lo->lo_number > 0) {
+		copy_btt(0, lo->lo_number);
 	}
 	return 0;
 

@@ -1031,10 +1031,10 @@ static inline int wait_on_page_bit_common(wait_queue_head_t *q,
 
 void wait_on_page_bit(struct page *page, int bit_nr)
 {
-	printk("lwg:%s:%d:waiting on page %p\n", __func__, __LINE__, page);
+	/*printk("lwg:%s:%d:waiting on page %p\n", __func__, __LINE__, page);*/
 	wait_queue_head_t *q = page_waitqueue(page);
 	wait_on_page_bit_common(q, page, bit_nr, TASK_UNINTERRUPTIBLE, false);
-	printk("lwg:%s:%d:done waiting on page %p\n", __func__, __LINE__, page);
+	/*printk("lwg:%s:%d:done waiting on page %p\n", __func__, __LINE__, page);*/
 }
 EXPORT_SYMBOL(wait_on_page_bit);
 

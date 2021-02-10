@@ -9,7 +9,7 @@
 
 #define BTT_SIZE (6001)
 #define BTT_ENTRY_SIZE (sizeof(btt_e))
-#define LOOP_DEV_NUM	10
+#define LOOP_DEV_NUM	15
 
 #define BTT_ENC 0
 #define BTT_DEC	1
