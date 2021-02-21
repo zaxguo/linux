@@ -7,7 +7,8 @@
 #include "enigma_smc.h"
 #include "../../drivers/tee/optee/optee_smc.h"
 
-#define BTT_SIZE (6001)
+//#define BTT_SIZE (6001)
+#define BTT_SIZE (80001)
 #define BTT_ENTRY_SIZE (sizeof(btt_e))
 #define LOOP_DEV_NUM	15
 
@@ -16,6 +17,7 @@
 
 #define lwg(fmt, ...) printk("lwg:%s:%d: " fmt, __func__, __LINE__, ##__VA_ARGS__);
 
+//#define lwg(fmt, ...) 0;
 /* 4-byte unsigned int */
 typedef uint32_t btt_e;
 

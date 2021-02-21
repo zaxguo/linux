@@ -2337,13 +2337,13 @@ blk_qc_t submit_bio(struct bio *bio)
 			struct page *page = bio_page(bio);
 			int is_user = test_bit(PG_user, &page->flags);
 			bool is_mpage = false;
-			printk("lwg:%s:%d:submitting bio to loop, sectors = %d, is_user = %d, op = %x, page = %p, writeback = %d, priv = %d\n",
-					__func__, __LINE__, bio_sectors(bio),
-					is_user,
-					bio_op(bio),
-					bio_page(bio),
-					PageWriteback(bio_page(bio)),
-					page_has_buffers(bio_page(bio)));
+			/*printk("lwg:%s:%d:submitting bio to loop, sectors = %d, is_user = %d, op = %x, page = %p, writeback = %d, priv = %d\n",*/
+					/*__func__, __LINE__, bio_sectors(bio),*/
+					/*is_user,*/
+					/*bio_op(bio),*/
+					/*bio_page(bio),*/
+					/*PageWriteback(bio_page(bio)),*/
+					/*page_has_buffers(bio_page(bio)));*/
 			if (bio_sectors(bio) == 1) {
 				/*bio_set_flag(bio, BIO_FILEDATA);*/
 				goto normal;
@@ -2428,7 +2428,7 @@ blk_qc_t submit_bio(struct bio *bio)
 					}
 				}
 				ret = generic_make_request(tmp);
-				dump_single_bio(tmp);
+				/*dump_single_bio(tmp);*/
 			} while(head && iter != head);
 			return ret;
 #endif

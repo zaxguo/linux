@@ -78,7 +78,7 @@ static int _update_btt(btt_e *btt, btt_e vblk, btt_e e_blk) {
 }
 
 int update_btt(int dev_id, btt_e vblk, btt_e e_blk) {
-	lwg("update [%d]: [%d] -> [%x]\n", dev_id, vblk, e_blk);
+	/*lwg("update [%d]: [%d] -> [%x]\n", dev_id, vblk, e_blk);*/
 	btt_e *btt = get_btt_for_device(dev_id);
 	return _update_btt(btt, vblk, e_blk);
 }

@@ -277,7 +277,7 @@ static int lo_write_bvec(struct file *file, struct bio_vec *bvec, loff_t *ppos)
 	struct page *pg = bvec->bv_page;
 	int is_user = test_bit(PG_user, &pg->flags);
 	if (is_user) {
-		printk("lwg:%s:%d:executing a user write...\n", __func__, __LINE__);
+		lwg("executing a user write...\n");
 	}
 
 	file_start_write(file);
@@ -628,11 +628,13 @@ static int do_req_filebacked(struct loop_device *lo, struct request *rq)
 			e_block = FILEDATA;
 		}
 		struct arm_smccc_res res;
-		/*lwg("switch:[%d:%d]:[%d ==> %x]\n",*/
-				/*dev_id,*/
-				/*req_op(rq),*/
-				/*(uint32_t)sector,*/
-				/*(uint32_t) e_block)*/
+#if 0
+		lwg("[%d:%d]:[%d ==> %x]\n",
+				dev_id,
+				req_op(rq),
+				(uint32_t)sector,
+				(uint32_t) e_block);
+#endif 
 		arm_smccc_smc(ENIGMA_SMC_CALL, req_op(rq), (uint32_t) e_block, dev_id,	0x0, 0x0, 0x0, 0x0, &res);
 
 		/* -----------lwg: the following is 'emulated' disk ops in tz ------------
