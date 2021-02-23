@@ -6,11 +6,12 @@
 #include "enigma_types.h"
 #include "enigma_smc.h"
 #include "../../drivers/tee/optee/optee_smc.h"
+#include <linux/mutex.h>
 
 //#define BTT_SIZE (6001)
 #define BTT_SIZE (80001)
 #define BTT_ENTRY_SIZE (sizeof(btt_e))
-#define LOOP_DEV_NUM	15
+#define MAX_DEV		15
 
 #define BTT_ENC 0
 #define BTT_DEC	1
@@ -22,7 +23,8 @@
 typedef uint32_t btt_e;
 
 struct enigma_cb {
-	btt_e *btt[LOOP_DEV_NUM];
+	btt_e *btt[MAX_DEV];
+	struct mutex btt_mtx[MAX_DEV];
 	struct crypto_skcipher *cipher;
 };
 

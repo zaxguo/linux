@@ -9,6 +9,7 @@
 #include "enigma.h"
 #include "enigma_types.h"
 #include "enigma_smc.h"
+#include <linux/mutex.h>
 
 
 #define NEEDS_ENDEC		0
@@ -69,6 +70,10 @@ int decrypt_btt_entry(btt_e *e_block) {
 	return 0;
 }
 
+static struct mutex* get_mtx_for_device(int lo) {
+	return &enigma_cb.btt_mtx[lo];
+}
+
 static int _update_btt(btt_e *btt, btt_e vblk, btt_e e_blk) {
 	if (!btt) {
 		return BTT_UPDATE_FAIL;
@@ -79,8 +84,13 @@ static int _update_btt(btt_e *btt, btt_e vblk, btt_e e_blk) {
 
 int update_btt(int dev_id, btt_e vblk, btt_e e_blk) {
 	/*lwg("update [%d]: [%d] -> [%x]\n", dev_id, vblk, e_blk);*/
+	int ret;
 	btt_e *btt = get_btt_for_device(dev_id);
-	return _update_btt(btt, vblk, e_blk);
+	struct mutex *mtx = get_mtx_for_device(dev_id);
+	/*mutex_lock(mtx);*/
+	ret =	_update_btt(btt, vblk, e_blk);
+	/*mutex_unlock(mtx);*/
+	return 0;
 }
 
 btt_e *alloc_btt(unsigned long size) {
@@ -91,6 +101,13 @@ btt_e *alloc_btt(unsigned long size) {
 	}
 	return ret;
 }
+
+
+static inline void init_mtx_for_device(struct enigma_cb *cb, int lo) {
+	struct mutex *mtx = &cb->btt_mtx[lo];
+	mutex_init(mtx);
+}
+
 
 int init_btt_for_device(int lo_number) {
 	struct enigma_cb *cb;
@@ -113,6 +130,7 @@ int init_btt_for_device(int lo_number) {
 		}
 		cb->btt[lo_number] = _btt;
 		lwg("btt initialization for [%d] complete..\n", lo_number);
+		init_mtx_for_device(cb, lo_number);
 		return 0;
 	} else {
 		lwg("btt for [%d] already exists..\n", lo_number);
@@ -202,7 +220,6 @@ int copy_btt(int from, int to) {
 	lwg("copied btt from [%d] to [%d]\n", from, to);
 	return 0;
 }
-
 
 
 int init_enigma_cb (void) {

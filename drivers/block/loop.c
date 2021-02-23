@@ -90,6 +90,7 @@ static DEFINE_MUTEX(loop_index_mutex);
 
 static int max_part;
 static int part_shift;
+static int actual_id = 0;
 
 static int transfer_xor(struct loop_device *lo, int cmd,
 			struct page *raw_page, unsigned raw_off,
@@ -277,7 +278,7 @@ static int lo_write_bvec(struct file *file, struct bio_vec *bvec, loff_t *ppos)
 	struct page *pg = bvec->bv_page;
 	int is_user = test_bit(PG_user, &pg->flags);
 	if (is_user) {
-		lwg("executing a user write...\n");
+		/*lwg("executing a user write...\n");*/
 	}
 
 	file_start_write(file);
@@ -611,7 +612,7 @@ static int do_req_filebacked(struct loop_device *lo, struct request *rq)
 	if (has_btt_for_device(dev_id)) {
 		 /* lwg: the op is a FLUSH command, sector = -1 with data_len = 0 */
 		if (sector == -1) {
-			lwg("special op: sector = %lx, len = %d, op = %d\n", sector, rq->__data_len, req_op(rq));
+			/*lwg("special op: sector = %lx, len = %d, op = %d\n", sector, rq->__data_len, req_op(rq));*/
 			goto handle_op;
 		}
 		btt_e e_block;
@@ -654,19 +655,20 @@ static int do_req_filebacked(struct loop_device *lo, struct request *rq)
 		 * initially, all blocks' btt entries are NULL_BLK -- read will return sector 0, reserved for all 0's
 		 * write to these blocks must come with e_block of FILEDATA -- this goes to the 2nd branch which directly returns
 		 * subsequent read to these filedata blocks will also go to the 2nd branch which directly returns/omitted */
-
-		if (e_block == NULL_BLK) {
-			/* reserve sector 0 for all 0's */
-			sector = 0;
-		} if (e_block == FILEDATA) {
-		/* filedata path */
-			int bytes = blk_rq_bytes(rq);
-			lwg("sector [%ld] filedata, ommitting %d bytes..\n", sector, bytes);
-			/* clear page bit flags in case it gets recycled */
-			clear_filedata_flag(rq);
-			return 0;
-		} else {
-			sector = e_block;
+		if (dev_id != actual_id) {
+			if (e_block == NULL_BLK) {
+				/* reserve sector 0 for all 0's */
+				sector = 0;
+			} if (e_block == FILEDATA) {
+			/* filedata path */
+				int bytes = blk_rq_bytes(rq);
+				/*lwg("[%d:%ld] filedata, ommitting %d bytes..\n", dev_id, sector, bytes);*/
+				/* clear page bit flags in case it gets recycled */
+				clear_filedata_flag(rq);
+				return 0;
+			} else {
+				sector = e_block;
+			}
 		}
 
 	}
@@ -1081,9 +1083,9 @@ static int loop_set_fd(struct loop_device *lo, fmode_t mode,
 	if (has_enigma_cb()) {
 		init_btt_for_device(lo->lo_number);
 	}
-	/* dirty */
-	if (lo->lo_number > 0) {
-		copy_btt(0, lo->lo_number);
+	/* dirty, we let loop0 be actual */
+	if (lo->lo_number > 1) {
+		copy_btt(1, lo->lo_number);
 	}
 	return 0;
 

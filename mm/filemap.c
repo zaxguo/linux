@@ -3040,7 +3040,7 @@ again:
 		delta = timespec64_sub(end, start);
 
 		if (!strncmp(current->comm, "a.out", sizeof("a.out"))) {
-			printk("lwg:%s:%d:comm = %s, copied %ld bytes to page %p, offset = %ld, ns = %lld\n", __func__, __LINE__, current->comm, copied, page, offset, timespec64_to_ns(&delta));
+			/*printk("lwg:%s:%d:comm = %s, copied %ld bytes to page %p, offset = %ld, ns = %lld\n", __func__, __LINE__, current->comm, copied, page, offset, timespec64_to_ns(&delta));*/
 			set_bit(PG_user, &page->flags);
 		}
 
