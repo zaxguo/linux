@@ -297,7 +297,6 @@ static int __blkdev_issue_zero_pages(struct block_device *bdev,
 		while (nr_sects != 0) {
 			sz = min((sector_t) PAGE_SIZE, nr_sects << 9);
 			bi_size = bio_add_page(bio, ZERO_PAGE(0), sz, 0);
-			printk("lwg:%s:%d:XXXXX page = %p\n", __func__, __LINE__, bio->bi_io_vec[0].bv_page);
 			nr_sects -= bi_size >> 9;
 			sector += bi_size >> 9;
 			if (bi_size < sz)

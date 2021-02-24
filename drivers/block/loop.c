@@ -277,9 +277,6 @@ static int lo_write_bvec(struct file *file, struct bio_vec *bvec, loff_t *ppos)
 
 	struct page *pg = bvec->bv_page;
 	int is_user = test_bit(PG_user, &pg->flags);
-	if (is_user) {
-		/*lwg("executing a user write...\n");*/
-	}
 
 	file_start_write(file);
 	bw = vfs_iter_write(file, &i, ppos, 0);
@@ -602,6 +599,14 @@ static inline void clear_filedata_flag(struct request *rq) {
 
 
 
+static inline int is_last_req(struct request *rq) {
+	struct bio* bio = rq->bio;
+	if (bio->bi_end_io) {
+		return 1;
+	}
+	return 0;
+}
+
 static int do_req_filebacked(struct loop_device *lo, struct request *rq)
 {
 	struct loop_cmd *cmd = blk_mq_rq_to_pdu(rq);
@@ -663,8 +668,11 @@ static int do_req_filebacked(struct loop_device *lo, struct request *rq)
 			/* filedata path */
 				int bytes = blk_rq_bytes(rq);
 				/*lwg("[%d:%ld] filedata, ommitting %d bytes..\n", dev_id, sector, bytes);*/
-				/* clear page bit flags in case it gets recycled */
-				clear_filedata_flag(rq);
+				/* clear page bit flags at the final sector in case the page gets recycled */
+				if (is_last_req(rq)) {
+					clear_filedata_flag(rq);
+					/*lwg("last sector, clearing flag for %p..\n", bio_page(rq->bio));*/
+				}
 				return 0;
 			} else {
 				sector = e_block;
@@ -1077,15 +1085,13 @@ static int loop_set_fd(struct loop_device *lo, fmode_t mode,
 	 */
 	bdgrab(bdev);
 
-	/* lwg: put btt init here */
-
 	/* add BTT when loop device is added */
 	if (has_enigma_cb()) {
 		init_btt_for_device(lo->lo_number);
-	}
-	/* dirty, we let loop0 be actual */
-	if (lo->lo_number > 1) {
-		copy_btt(1, lo->lo_number);
+		/* dirty, we let loop0 be actual, other will get btt from loop1 */
+		if (lo->lo_number > 1) {
+			copy_btt(1, lo->lo_number);
+		}
 	}
 	return 0;
 

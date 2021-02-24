@@ -2241,7 +2241,6 @@ blk_qc_t generic_make_request(struct bio *bio)
 			bio_list_init(&lower);
 			bio_list_init(&same);
 			while ((bio = bio_list_pop(&bio_list_on_stack[0])) != NULL) {
-				printk("lwg:%s:%d:hit\n", __func__, __LINE__);
 				if (q == bio->bi_disk->queue)
 					bio_list_add(&same, bio);
 				else
@@ -2336,7 +2335,7 @@ blk_qc_t submit_bio(struct bio *bio)
 			/* TODO: what happens when filedata & metadata coexist in one page? */
 			struct page *page = bio_page(bio);
 			int is_user = test_bit(PG_user, &page->flags);
-			bool is_mpage = false;
+			bool page_io = false;
 			/*printk("lwg:%s:%d:submitting bio to loop, sectors = %d, is_user = %d, op = %x, page = %p, writeback = %d, priv = %d\n",*/
 					/*__func__, __LINE__, bio_sectors(bio),*/
 					/*is_user,*/
@@ -2348,6 +2347,17 @@ blk_qc_t submit_bio(struct bio *bio)
 				/*bio_set_flag(bio, BIO_FILEDATA);*/
 				goto normal;
 			}
+
+#if 0
+			/* zeroout by ext4... */
+			if (bio_sectors(bio) == 158) {
+				dump_stack();
+				/* end_io = submit_bio_wait_endio */
+				/* ext4_end_bio is a huge trouble */
+				printk("end bio = %pf\n", bio->bi_end_io);
+				while(1);
+			}
+#endif
 
 #if 0
 			/* lwg: multi-seg bio debug, turn on when necessary */
@@ -2386,8 +2396,8 @@ blk_qc_t submit_bio(struct bio *bio)
 			/*if (end_io == end_bio_bh_io_sync || end_io == submit_bio_wait_endio) {*/
 			if (end_io) {
 				priv = bio->bi_private;
-				if (end_io == mpage_end_io) {
-					is_mpage = true;
+				if (end_io == mpage_end_io || end_io == ext4_end_bio) {
+					page_io = true;
 				/* tailor individual buffer_head for ext4 due to its flaw */
 				} else if (end_io == ext4_end_bio) {
 #if 0
@@ -2400,7 +2410,7 @@ blk_qc_t submit_bio(struct bio *bio)
 							bh->b_size = 1 << 9;
 						} while((bh = bh->b_this_page) != head);
 					}
-#endif 
+#endif
 				}
 			}
 			do {
@@ -2419,8 +2429,14 @@ blk_qc_t submit_bio(struct bio *bio)
 				/* lwg: there are two types of bio issued from pagecache or block layer
 				 * for the former, we need to configure notification at page boundary,
 				 * for the latter, we only need to configure at the last (chained) bio */
-				if ( (((count & 0x7) == 0) && is_mpage) ||
+				if ( (((count & 0x7) == 0) && page_io) ||
 						iter == head) {
+					tmp->bi_end_io = end_io;
+					/* notification delivery */
+					if (priv) {
+						tmp->bi_private = priv;
+					}
+				} else if (((count & 0x7) == 0 && end_io == ext4_end_bio)) {
 					tmp->bi_end_io = end_io;
 					/* notification delivery */
 					if (priv) {
