@@ -630,7 +630,7 @@ static int do_req_filebacked(struct loop_device *lo, struct request *rq)
 		/* an encrypted block */
 		e_block = result.block;
 
-		if (is_filedata_rq(rq)) {
+		if (is_filedata_rq(rq) && dev_id != actual_id) {
 			e_block = FILEDATA;
 		}
 		struct arm_smccc_res res;
