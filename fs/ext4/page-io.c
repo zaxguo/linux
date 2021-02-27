@@ -129,7 +129,15 @@ static void ext4_release_io_end(ext4_io_end_t *io_end)
 {
 	struct bio *bio, *next_bio;
 
-	BUG_ON(!list_empty(&io_end->list));
+	if (!list_empty(&io_end->list)) {
+		printk("dump io_end: count %d, offset %ld, size %ld,", io_end->count, io_end->offset, io_end->size);
+		printk("ext4_end_io_nolock: list->next 0x%p,"
+			   "list->prev 0x%p\n",
+			   io_end->list.next, io_end->list.prev);
+
+		BUG_ON(1);
+	}
+	/*BUG_ON(!list_empty(&io_end->list));*/
 	BUG_ON(io_end->flag & EXT4_IO_END_UNWRITTEN);
 	WARN_ON(io_end->handle);
 

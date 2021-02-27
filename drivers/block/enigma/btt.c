@@ -125,7 +125,12 @@ int init_btt_for_device(int lo_number) {
 		}
 		/* lwg: this is a dummy BTT - init BTT entries */
 		for (i = 0; i < BTT_SIZE; i++) {
-			_btt[i] = NULL_BLK;
+			if (lo_number == cb->actual) {
+				/* sectors are linearly mapped in actual */
+				_btt[i] = i;
+			} else {
+				_btt[i] = NULL_BLK;
+			}
 			encrypt_btt_entry(_btt + i);
 		}
 		cb->btt[lo_number] = _btt;
@@ -226,6 +231,7 @@ int init_enigma_cb (void) {
 	int ret;
 	struct enigma_cb* cb = &enigma_cb;
 	ret = init_enigma_crypto(&cb->cipher);
+	cb->actual = 0;
 	lwg("enigma_cb initialized tfm -- %p\n", enigma_cb.cipher);
 	lwg("enigma cb initialized..\n");
 	return 0;

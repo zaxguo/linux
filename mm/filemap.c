@@ -1128,10 +1128,14 @@ void end_page_writeback(struct page *page)
 		ClearPageReclaim(page);
 		rotate_reclaimable_page(page);
 	}
-
-	if (!test_clear_page_writeback(page))
-		BUG();
-
+	int ret = test_clear_page_writeback(page);
+	/*if (!test_clear_page_writeback(page)) {*/
+	if (!ret) {
+		if (!test_and_clear_bit(PG_user, &page->flags)) {
+			printk("lwg:%s:%d:failed clear wb for %p but cannot continue, ret = %d\n", __func__, __LINE__, page, ret);
+			BUG();
+		}
+	}
 	smp_mb__after_atomic();
 	wake_up_page(page, PG_writeback);
 }

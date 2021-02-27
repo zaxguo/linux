@@ -8,7 +8,8 @@
 #include <string.h>
 
 
-#define SYBIL_CNT 10
+#define FS_CNT			2
+#define MAX_RECORDS		8000
 
 struct args {
 	int tid;
@@ -17,12 +18,12 @@ struct args {
 
 int *rosbag_lib;
 
-static int get_write_from_trace(void) {
-	return 0;
+static int replay_write_from_trace(int idx) {
+	return rosbag_lib[idx];
 }
 
 static void *test_write(void *args) {
-	int ret, write_size, total, txt;
+	int ret, write_size, total, txt, idx;
 	char dest[50];
 	struct args *arg = (struct args*) args;
 	double start, end, delta;
@@ -30,22 +31,25 @@ static void *test_write(void *args) {
 		start = clock();
 	}
 	total = 0;
+	idx = 0;
 	ret = snprintf(dest, 50, "/sybil/fs%d/test.txt", arg->tid);
 	txt = open(dest, O_RDWR);
 	do {
-		write_size = get_write_from_trace();
+		write_size = replay_write_from_trace(idx++);
+		printf("[%d]:idx = %d, write_size = %d\n", arg->tid, idx, write_size);
 		ret = write(txt, arg->data, write_size);
 		if (ret > 0) {
 			total += ret;
 		}
+		printf("[%d]:ret = %d, write_size = %d\n", arg->tid, ret, write_size);
 	} while(ret == write_size);
 	fsync(txt);
-	if (arg->tid == 1) {
+	if (arg->tid == 0) {
 		end = clock();
 		delta = (end - start)/CLOCKS_PER_SEC;
+		printf("has written %d bytes to %s.\n", total, dest);
 		printf("takes %f seconds for actual to finish.\n", delta);
 	}
-	printf("has written %d bytes to %s.\n", total, dest);
 }
 
 static int* construct_lib(char *lib_path) {
@@ -55,12 +59,12 @@ static int* construct_lib(char *lib_path) {
 	ssize_t nread;
 	int lib_idx = 0;
 	lib = fopen(lib_path, "r");
-	rosbag_lib = malloc(8000 * sizeof(int));
+	rosbag_lib = malloc(MAX_RECORDS * sizeof(int));
 	if (lib == NULL) {
 		perror("fopen");
 		exit(EXIT_FAILURE);
 	}
-	while ((nread = getline(&line, &len, lib)) != -1) {
+	while (((nread = getline(&line, &len, lib)) != -1) && lib_idx < MAX_RECORDS) {
 		int cnt, idx, res;
 		cnt = 0; idx = 0;
 		while (cnt < 2 && idx < strlen(line)) {
@@ -69,10 +73,10 @@ static int* construct_lib(char *lib_path) {
 		}
 		res = atoi(line + idx);
 		rosbag_lib[lib_idx++] = res;
-		printf("%d\n", res);
 	}
 	free(line);
 	fclose(lib);
+	return rosbag_lib;
 }
 
 
@@ -80,13 +84,12 @@ int main() {
 	int i, ret;
 	pthread_t tid, actual;
 	char *data;
-
-	construct_lib("../rosbag_logs/output/test.log");
-	return 0;
-	/* large write */
-	data = malloc(80000);
-	memset(data, 'a', 80000);
-	for (i = 1; i < SYBIL_CNT; i++) {
+	int *trace_lib;
+	trace_lib = construct_lib("../rosbag_logs/output/test.log");
+	/* prepare the data */
+	data = malloc(900000);
+	memset(data, 'a', 900000);
+	for (i = 0; i < FS_CNT; i++) {
 		struct args* arg = malloc(sizeof(struct args));
 		arg->tid = i;
 		arg->data = data;
@@ -96,8 +99,8 @@ int main() {
 		}
 	}
 	/* wait for the actual to finish */
-	pthread_join(tid, NULL);
+	pthread_join(actual, NULL);
 	/*pthread_join(actual, NULL);*/
-	pthread_exit(0);
+	/*pthread_exit(0);*/
 	return 0;
 }

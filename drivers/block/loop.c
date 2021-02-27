@@ -594,7 +594,8 @@ static inline void clear_filedata_flag(struct request *rq) {
 	struct page *pg;
 	WARN_ON(!bio);
 	pg = bio_page(bio);
-	return clear_bit(PG_user, &pg->flags);
+	BUG_ON(!test_and_clear_bit(PG_user, &pg->flags));
+	return;
 }
 
 
@@ -670,8 +671,7 @@ static int do_req_filebacked(struct loop_device *lo, struct request *rq)
 				/*lwg("[%d:%ld] filedata, ommitting %d bytes..\n", dev_id, sector, bytes);*/
 				/* clear page bit flags at the final sector in case the page gets recycled */
 				if (is_last_req(rq)) {
-					clear_filedata_flag(rq);
-					/*lwg("last sector, clearing flag for %p..\n", bio_page(rq->bio));*/
+					/*clear_filedata_flag(rq);*/
 				}
 				return 0;
 			} else {
