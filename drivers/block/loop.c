@@ -668,11 +668,13 @@ static int do_req_filebacked(struct loop_device *lo, struct request *rq)
 			} if (e_block == FILEDATA) {
 			/* filedata path */
 				int bytes = blk_rq_bytes(rq);
-				/*lwg("[%d:%ld] filedata, ommitting %d bytes..\n", dev_id, sector, bytes);*/
+				/*lwg("[%d:%ld:%p] filedata, ommitting %d bytes..\n", dev_id, sector, bio_page(rq->bio), bytes);*/
 				/* clear page bit flags at the final sector in case the page gets recycled */
+#if 0  /* lwg: we clear page bit in the cmd completion phase */
 				if (is_last_req(rq)) {
 					/*clear_filedata_flag(rq);*/
 				}
+#endif 
 				return 0;
 			} else {
 				sector = e_block;

@@ -8,8 +8,8 @@
 #include <string.h>
 
 
-#define FS_CNT			2
-#define MAX_RECORDS		8000
+#define DEFAULT_FS_CNT			4
+#define MAX_RECORDS				8000
 
 struct args {
 	int tid;
@@ -17,6 +17,7 @@ struct args {
 };
 
 int *rosbag_lib;
+int fs_cnt = DEFAULT_FS_CNT;
 
 static int replay_write_from_trace(int idx) {
 	return rosbag_lib[idx];
@@ -36,19 +37,19 @@ static void *test_write(void *args) {
 	txt = open(dest, O_RDWR);
 	do {
 		write_size = replay_write_from_trace(idx++);
-		printf("[%d]:idx = %d, write_size = %d\n", arg->tid, idx, write_size);
+		/*printf("[%d]:idx = %d, write_size = %d\n", arg->tid, idx, write_size);*/
 		ret = write(txt, arg->data, write_size);
 		if (ret > 0) {
 			total += ret;
 		}
-		printf("[%d]:ret = %d, write_size = %d\n", arg->tid, ret, write_size);
+		/*printf("[%d]:ret = %d, write_size = %d\n", arg->tid, ret, write_size);*/
 	} while(ret == write_size);
 	fsync(txt);
 	if (arg->tid == 0) {
 		end = clock();
 		delta = (end - start)/CLOCKS_PER_SEC;
 		printf("has written %d bytes to %s.\n", total, dest);
-		printf("takes %f seconds for actual to finish.\n", delta);
+		printf("[%d]: takes %f seconds for actual to finish.\n", fs_cnt, delta);
 	}
 }
 
@@ -80,7 +81,7 @@ static int* construct_lib(char *lib_path) {
 }
 
 
-int main() {
+int main(int argc, char *argv[]) {
 	int i, ret;
 	pthread_t tid, actual;
 	char *data;
@@ -89,7 +90,11 @@ int main() {
 	/* prepare the data */
 	data = malloc(900000);
 	memset(data, 'a', 900000);
-	for (i = 0; i < FS_CNT; i++) {
+	if (argc == 2) {
+		fs_cnt = atoi(argv[1]);
+	}
+	printf("rosbad traces replay on %d fses..\n", fs_cnt);
+	for (i = 0; i < fs_cnt; i++) {
 		struct args* arg = malloc(sizeof(struct args));
 		arg->tid = i;
 		arg->data = data;
@@ -101,6 +106,6 @@ int main() {
 	/* wait for the actual to finish */
 	pthread_join(actual, NULL);
 	/*pthread_join(actual, NULL);*/
-	/*pthread_exit(0);*/
+	pthread_exit(0);
 	return 0;
 }

@@ -2290,7 +2290,7 @@ static struct bio *enigma_split_bio(struct bio *orig) {
 	return head;
 }
 
-static inline void dump_single_bio(struct bio* bio) {
+void dump_single_bio(struct bio* bio) {
 	BUG_ON(!bio);
 	printk("lwg:%s:%d:block [%lu], size [%d], sector [%d], end = %pf, page = %p, page offset = %u, len = %u, seg = %u",
 	__func__, __LINE__,
@@ -2299,6 +2299,7 @@ static inline void dump_single_bio(struct bio* bio) {
 	bio->bi_io_vec->bv_page, bio->bi_io_vec->bv_offset,
 	bio->bi_io_vec->bv_len, bio->bi_vcnt);
 }
+EXPORT_SYMBOL(dump_single_bio);
 
 extern void mpage_end_io(struct bio *bio);
 /**

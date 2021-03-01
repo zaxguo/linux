@@ -1134,6 +1134,8 @@ void end_page_writeback(struct page *page)
 		if (!test_and_clear_bit(PG_user, &page->flags)) {
 			printk("lwg:%s:%d:failed clear wb for %p but cannot continue, ret = %d\n", __func__, __LINE__, page, ret);
 			BUG();
+		} else {
+			/*printk("lwg:%s:%d:clear wb for %p\n", __func__, __LINE__, page);*/
 		}
 	}
 	smp_mb__after_atomic();

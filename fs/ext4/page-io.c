@@ -125,16 +125,24 @@ static void ext4_finish_bio(struct bio *bio)
 	}
 }
 
+extern void dump_single_bio(struct bio *bio);
+
 static void ext4_release_io_end(ext4_io_end_t *io_end)
 {
 	struct bio *bio, *next_bio;
 
 	if (!list_empty(&io_end->list)) {
-		printk("dump io_end: count %d, offset %ld, size %ld,", io_end->count, io_end->offset, io_end->size);
+		printk("dump io_end: count %d, offset %ld, size %ld, unwritten = %d", io_end->count, io_end->offset, io_end->size, io_end->flag & EXT4_IO_END_UNWRITTEN);
 		printk("ext4_end_io_nolock: list->next 0x%p,"
 			   "list->prev 0x%p\n",
 			   io_end->list.next, io_end->list.prev);
-
+		if (!io_end->bio) {
+			printk("lwg:%s:%d:invalid io_end!!!", __func__, __LINE__);
+			kmem_cache_free(io_end_cachep, io_end);
+			return;
+		} else {
+			dump_single_bio(io_end->bio);
+		}
 		BUG_ON(1);
 	}
 	/*BUG_ON(!list_empty(&io_end->list));*/
@@ -222,6 +230,7 @@ static void ext4_add_complete_io(ext4_io_end_t *io_end)
 	if (list_empty(&ei->i_rsv_conversion_list))
 		queue_work(wq, &ei->i_rsv_conversion_work);
 	list_add_tail(&io_end->list, &ei->i_rsv_conversion_list);
+	printk("lwg:add 0x%p to list 0x%p\n", &ei->i_rsv_conversion_list, &io_end->list);
 	spin_unlock_irqrestore(&ei->i_completed_io_lock, flags);
 }
 
@@ -243,7 +252,7 @@ static int ext4_do_flush_completed_IO(struct inode *inode,
 		io = list_entry(unwritten.next, ext4_io_end_t, list);
 		BUG_ON(!(io->flag & EXT4_IO_END_UNWRITTEN));
 		list_del_init(&io->list);
-
+		printk("lwg:%s:%d:del list 0x%p\n", __func__, __LINE__,  &io->list);
 		err = ext4_end_io(io);
 		if (unlikely(!ret && err))
 			ret = err;
