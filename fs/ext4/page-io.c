@@ -138,7 +138,6 @@ static void ext4_release_io_end(ext4_io_end_t *io_end)
 			   io_end->list.next, io_end->list.prev);
 		if (!io_end->bio) {
 			printk("lwg:%s:%d:invalid io_end!!!", __func__, __LINE__);
-			kmem_cache_free(io_end_cachep, io_end);
 			return;
 		} else {
 			dump_single_bio(io_end->bio);

@@ -651,7 +651,6 @@ static int do_req_filebacked(struct loop_device *lo, struct request *rq)
 		/*decrypt_btt_entry(&e_block);*/
 		e_block = res.a0;
 
-
 		/* TODO: update as directed by TZ not on all write */
 		if (need_update_btt(rq, e_block)) {
 			update_btt(dev_id, (btt_e)sector, e_block);
@@ -678,6 +677,10 @@ static int do_req_filebacked(struct loop_device *lo, struct request *rq)
 				return 0;
 			} else {
 				sector = e_block;
+				if (sector > get_loop_size(lo, lo->lo_backing_file)) {
+					printk("sector = %lld, lo size = %lld\n", get_loop_size(lo, lo->lo_backing_file));
+					BUG_ON(1);
+				}
 			}
 		}
 
@@ -1041,6 +1044,7 @@ static int loop_set_fd(struct loop_device *lo, fmode_t mode,
 
 	error = -EFBIG;
 	size = get_loop_size(lo, file);
+	printk("lo %d, size = %lld\n", lo->lo_number, size);
 	if ((loff_t)(sector_t)size != size)
 		goto out_putf;
 	error = loop_prepare_queue(lo);
@@ -1089,7 +1093,9 @@ static int loop_set_fd(struct loop_device *lo, fmode_t mode,
 
 	/* add BTT when loop device is added */
 	if (has_enigma_cb()) {
+		struct gendisk *disk = lo->lo_disk;
 		init_btt_for_device(lo->lo_number);
+		disk->flags |= GENHD_HAS_BTT;
 		/* dirty, we let loop0 be actual, other will get btt from loop1 */
 		if (lo->lo_number > 1) {
 			copy_btt(1, lo->lo_number);
@@ -2255,8 +2261,8 @@ static int __init loop_init(void)
 
 	printk(KERN_INFO "loop: module loaded\n");
 
-	// lwg: one-time init of enigma loop cb
-	init_enigma_cb();
+	// lwg: one-time init of enigma loop cb -- turn off for strawman approach
+	/*init_enigma_cb();*/
 	return 0;
 
 misc_out:

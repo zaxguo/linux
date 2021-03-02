@@ -2330,8 +2330,8 @@ blk_qc_t submit_bio(struct bio *bio)
 	if (bio_has_data(bio)) {
 		unsigned int count;
 		struct gendisk *disk = bio->bi_disk;
-		/* need to split bio if it is loop device */
-		if (!strncmp("loop", disk->disk_name, 4)) {
+		/* lwg: need to split bio if it is loop device && has btt  */
+		if (!strncmp("loop", disk->disk_name, 4) && (disk->flags & GENHD_HAS_BTT)) {
 			struct request_queue *q = disk->queue;
 			/* TODO: what happens when filedata & metadata coexist in one page? */
 			struct page *page = bio_page(bio);

@@ -9,7 +9,8 @@
 #include <linux/mutex.h>
 
 //#define BTT_SIZE (6001)
-#define BTT_SIZE (80001)
+//#define BTT_SIZE (80001)
+#define BTT_SIZE (200001)
 #define BTT_ENTRY_SIZE (sizeof(btt_e))
 #define MAX_DEV		15
 
