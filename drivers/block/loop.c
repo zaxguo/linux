@@ -269,17 +269,28 @@ lo_do_transfer(struct loop_device *lo, int cmd,
 
 static int lo_write_bvec(struct file *file, struct bio_vec *bvec, loff_t *ppos)
 {
-	struct iov_iter i;
+	struct iov_iter i[8];
 	ssize_t bw;
-
-
-	iov_iter_bvec(&i, ITER_BVEC | WRITE, bvec, 1, bvec->bv_len);
-
+	int k;
+	/* split sector at this level */
+	loff_t pos_iter, sector_iter;
+	uint8_t sector_cnt = (bvec->bv_len >> 9);
+	for (k = 0; k < sector_cnt; k++) {
+		iov_iter_bvec(&i[k], ITER_BVEC | WRITE, bvec, 1, 1 << 9);
+		lwg("%d:cnt = %d\n", k, i[k].count);
+	}
 	struct page *pg = bvec->bv_page;
 	int is_user = test_bit(PG_user, &pg->flags);
-
+	bw = 0;
+	sector_iter = *ppos;
+	lwg("starting sec = %lld\n", sector_iter);
 	file_start_write(file);
-	bw = vfs_iter_write(file, &i, ppos, 0);
+	for (k = 0; k < sector_cnt; k++) {
+		pos_iter = sector_iter << 9;
+		lwg("writing sec = %lld, pos = %lld\n", sector_iter, pos_iter);
+		bw += vfs_iter_write(file, &i[k], &pos_iter, 0);
+		++sector_iter;
+	}
 	file_end_write(file);
 
 	if (likely(bw ==  bvec->bv_len))
@@ -301,8 +312,8 @@ static int lo_write_simple(struct loop_device *lo, struct request *rq,
 	int ret = 0;
 
 	/* lwg: segment bvec into separate sectors  */
-
 	rq_for_each_segment(bvec, rq, iter) {
+		lwg("%p, %d, %d\n", bvec.bv_page, bvec.bv_len, bvec.bv_offset);
 		ret = lo_write_bvec(lo->lo_backing_file, &bvec, &pos);
 		if (ret < 0)
 			break;
@@ -686,7 +697,8 @@ static int do_req_filebacked(struct loop_device *lo, struct request *rq)
 
 	}
 	/* --- lwg: below is the trusted part where we emulate the in-TZ disk driver ---- */
-	loff_t pos = (sector << 9) + lo->lo_offset;
+	/*loff_t pos = (sector << 9) + lo->lo_offset;*/
+	loff_t pos = sector;
 	/*
 	 * lo_write_simple and lo_read_simple should have been covered
 	 * by io submit style function like lo_rw_aio(), one blocker
@@ -1082,7 +1094,6 @@ static int loop_set_fd(struct loop_device *lo, fmode_t mode,
 	if (part_shift)
 		lo->lo_flags |= LO_FLAGS_PARTSCAN;
 	if (lo->lo_flags & LO_FLAGS_PARTSCAN) {
-		lwg("hit..");
 		loop_reread_partitions(lo, bdev);
 	}
 
