@@ -267,7 +267,86 @@ lo_do_transfer(struct loop_device *lo, int cmd,
 	return ret;
 }
 
-static int lo_write_bvec(struct file *file, struct bio_vec *bvec, loff_t *ppos)
+static inline int is_filedata_blk(struct page *pg) {
+	return test_bit(PG_user, &pg->flags);
+}
+
+/* update btt only when actual allocation happens inside tz, satisfying two conditions:
+ * 1: must be a write;
+ * 2: returned block is not NULL_BLK or FILEDATA 
+ * */
+static inline int need_update_btt(int req_op, btt_e tz_block) {
+	if (req_op == REQ_OP_WRITE) {
+		return 1;
+		/*if (tz_block != NULL_BLK && tz_block != FILEDATA) {*/
+			/*return 1;*/
+		/*}*/
+	}
+	return 0;
+}
+
+static btt_e get_disk_blk(int dev_id, btt_e sector, struct page *pg, int req_op) {
+	if (!has_btt_for_device(dev_id)) {
+		return sector;
+	}
+	/* btt translation */
+	btt_e e_block;
+	int err;
+	struct lookup_result result;
+	err = lookup_block(dev_id, sector, &result);
+	if (err) {
+		/* TODO: Error handling */
+	}
+	/* an encrypted block */
+	e_block = result.block;
+	if (is_filedata_blk(pg) && dev_id != actual_id) {
+		e_block = FILEDATA;
+	}
+	struct arm_smccc_res res;
+#if 0
+	/* some debugging */
+	lwg("[%d:%d]:[%d ==> %x]\n",
+			dev_id,
+			req_op,
+			(uint32_t)sector,
+			(uint32_t) e_block);
+#endif
+	arm_smccc_smc(ENIGMA_SMC_CALL, req_op, (uint32_t) e_block, dev_id,	0x0, 0x0, 0x0, 0x0, &res);
+
+	/* -----------lwg: the following is 'emulated' disk ops in tz ------------
+	 * -----------     it is considered to be part of our TCB  --------------*/
+	/*lwg("get res = %lx, %lx, %lx, %lx\n", res.a0, res.a1, res.a2, res.a3);*/
+
+	/*decrypt_btt_entry(&e_block);*/
+	e_block = res.a0;
+	/* the following code rejects rogue read & discard filedata write:
+	 * initially, all blocks' btt entries are NULL_BLK -- read will return sector 0, reserved for all 0's
+	 * write to these blocks must come with e_block of FILEDATA -- this goes to the 2nd branch which directly returns
+	 * subsequent read to these filedata blocks will also go to the 2nd branch which directly returns/omitted */
+	if (dev_id != actual_id) {
+		/* TODO: update as directed by TZ not on all write */
+		if (need_update_btt(req_op, e_block)) {
+			update_btt(dev_id, (btt_e)sector, e_block);
+		}
+		switch (e_block) {
+			case NULL_BLK:
+			/* reserve sector 0 for all 0's */
+				return 0;
+			case FILEDATA:
+				return FILEDATA;
+			default:
+				/*if (e_block > get_loop_size(lo, lo->lo_backing_file)) {*/
+					/*printk("sector = %lld, lo size = %lld\n", get_loop_size(lo, lo->lo_backing_file));*/
+					/*BUG_ON(1);*/
+				/*}*/
+				return e_block;
+		}
+	}
+	/* actual disk */
+	return e_block;
+}
+
+static int lo_write_bvec(struct loop_device *lo, struct file *file, struct bio_vec *bvec, loff_t *ppos)
 {
 	struct iov_iter i[8];
 	ssize_t bw;
@@ -275,21 +354,25 @@ static int lo_write_bvec(struct file *file, struct bio_vec *bvec, loff_t *ppos)
 	/* split sector at this level */
 	loff_t pos_iter, sector_iter;
 	uint8_t sector_cnt = (bvec->bv_len >> 9);
-	for (k = 0; k < sector_cnt; k++) {
-		iov_iter_bvec(&i[k], ITER_BVEC | WRITE, bvec, 1, 1 << 9);
-		lwg("%d:cnt = %d\n", k, i[k].count);
-	}
-	struct page *pg = bvec->bv_page;
-	int is_user = test_bit(PG_user, &pg->flags);
 	bw = 0;
 	sector_iter = *ppos;
-	lwg("starting sec = %lld\n", sector_iter);
+
 	file_start_write(file);
-	for (k = 0; k < sector_cnt; k++) {
-		pos_iter = sector_iter << 9;
-		lwg("writing sec = %lld, pos = %lld\n", sector_iter, pos_iter);
-		bw += vfs_iter_write(file, &i[k], &pos_iter, 0);
-		++sector_iter;
+	if (has_btt_for_device(lo->lo_number)) {
+		/* our path */
+		lwg("starting sec = %lld\n", sector_iter);
+		for (k = 0; k < sector_cnt; k++) {
+			iov_iter_bvec(&i[k], ITER_BVEC | WRITE, bvec, 1, 1 << 9);
+			btt_e disk_blk = get_disk_blk(lo->lo_number, sector_iter, bvec->bv_page, REQ_OP_WRITE);
+			pos_iter = disk_blk << 9;
+			lwg("writing [%lld->%d]\n", sector_iter, disk_blk);
+			bw += vfs_iter_write(file, &i[k], &pos_iter, 0);
+			++sector_iter;
+		}
+	} else {
+		/* original semantics */
+		iov_iter_bvec(&i[0], ITER_BVEC | WRITE, bvec, 1, bvec->bv_len);
+		bw = vfs_iter_write(file, &i[k], ppos, 0);
 	}
 	file_end_write(file);
 
@@ -313,8 +396,7 @@ static int lo_write_simple(struct loop_device *lo, struct request *rq,
 
 	/* lwg: segment bvec into separate sectors  */
 	rq_for_each_segment(bvec, rq, iter) {
-		lwg("%p, %d, %d\n", bvec.bv_page, bvec.bv_len, bvec.bv_offset);
-		ret = lo_write_bvec(lo->lo_backing_file, &bvec, &pos);
+		ret = lo_write_bvec(lo, lo->lo_backing_file, &bvec, &pos);
 		if (ret < 0)
 			break;
 		cond_resched();
@@ -349,7 +431,7 @@ static int lo_write_transfer(struct loop_device *lo, struct request *rq,
 		b.bv_page = page;
 		b.bv_offset = 0;
 		b.bv_len = bvec.bv_len;
-		ret = lo_write_bvec(lo->lo_backing_file, &b, &pos);
+		ret = lo_write_bvec(lo, lo->lo_backing_file, &b, &pos);
 		if (ret < 0)
 			break;
 	}
@@ -363,26 +445,56 @@ static int lo_read_simple(struct loop_device *lo, struct request *rq,
 {
 	struct bio_vec bvec;
 	struct req_iterator iter;
-	struct iov_iter i;
+	struct iov_iter i[8];
 	ssize_t len;
-
+	unsigned int sector_cnt;
 	rq_for_each_segment(bvec, rq, iter) {
-		iov_iter_bvec(&i, ITER_BVEC, &bvec, 1, bvec.bv_len);
-		len = vfs_iter_read(lo->lo_backing_file, &i, &pos, 0);
-		if (len < 0)
-			return len;
+		if (!has_btt_for_device(lo->lo_number)) {
+			iov_iter_bvec(&i[0], ITER_BVEC, &bvec, 1, bvec.bv_len);
+			len = vfs_iter_read(lo->lo_backing_file, &i[0], &pos, 0);
+			if (len < 0)
+				return len;
 
-		flush_dcache_page(bvec.bv_page);
+			flush_dcache_page(bvec.bv_page);
 
-		if (len != bvec.bv_len) {
-			struct bio *bio;
+			if (len != bvec.bv_len) {
+				struct bio *bio;
 
-			__rq_for_each_bio(bio, rq)
-				zero_fill_bio(bio);
-			break;
+				__rq_for_each_bio(bio, rq)
+					zero_fill_bio(bio);
+				break;
+			}
+		} else {
+			/* our path */
+			int k;
+			btt_e disk_blk;
+			loff_t sector_iter, pos_iter;
+			sector_cnt = bvec.bv_len >> 9;
+			BUG_ON(sector_cnt > 8);
+			sector_iter = pos;
+			lwg("starting sec:%lld\n", sector_iter);
+			for (k = 0; k < sector_cnt; k++) {
+				iov_iter_bvec(&i[k], ITER_BVEC, &bvec, 1, 1 << 9);
+				disk_blk = get_disk_blk(lo->lo_number, sector_iter, bvec.bv_page, REQ_OP_READ);
+				pos_iter = disk_blk << 9;
+				len = vfs_iter_read(lo->lo_backing_file, &i[k], &pos_iter, 0);
+				if (len < 0)
+					return len;
+
+				flush_dcache_page(bvec.bv_page);
+
+				if (len != bvec.bv_len) {
+					struct bio *bio;
+
+					__rq_for_each_bio(bio, rq)
+						zero_fill_bio(bio);
+					break;
+				}
+				++sector_iter;
+			}
 		}
 #if 0
-		lwg("page = %p, bv len = %d, offset = %d\n", 
+		lwg("page = %p, bv len = %d, offset = %d\n",
 			 bvec.bv_page,
 			 bvec.bv_len,
 			 bvec.bv_offset);
@@ -578,19 +690,7 @@ static int lo_rw_aio(struct loop_device *lo, struct loop_cmd *cmd,
 	return 0;
 }
 
-/* update btt only when actual allocation happens inside tz, satisfying two conditions:
- * 1: must be a write;
- * 2: returned block is not NULL_BLK or FILEDATA 
- * */
-static inline int need_update_btt(struct request *rq, btt_e tz_block) {
-	if (req_op(rq) == REQ_OP_WRITE) {
-		return 1;
-		/*if (tz_block != NULL_BLK && tz_block != FILEDATA) {*/
-			/*return 1;*/
-		/*}*/
-	}
-	return 0;
-}
+
 
 static inline int is_filedata_rq(struct request *rq) {
 	struct bio *bio = rq->bio;
@@ -599,6 +699,7 @@ static inline int is_filedata_rq(struct request *rq) {
 	pg = bio_page(bio);
 	return test_bit(PG_user, &pg->flags);
 }
+
 
 static inline void clear_filedata_flag(struct request *rq) {
 	struct bio *bio = rq->bio;
@@ -624,81 +725,17 @@ static int do_req_filebacked(struct loop_device *lo, struct request *rq)
 	struct loop_cmd *cmd = blk_mq_rq_to_pdu(rq);
 	int dev_id = lo->lo_number;
 	/* lwg: each sector is 512 Bytes hence << 9 */
+	loff_t pos;
 	loff_t sector = blk_rq_pos(rq);
 
-	if (has_btt_for_device(dev_id)) {
-		 /* lwg: the op is a FLUSH command, sector = -1 with data_len = 0 */
-		if (sector == -1) {
-			/*lwg("special op: sector = %lx, len = %d, op = %d\n", sector, rq->__data_len, req_op(rq));*/
-			goto handle_op;
-		}
-		btt_e e_block;
-		int err;
-		struct lookup_result result;
-		err = lookup_block(dev_id, sector, &result);
-		if (err) {
-			/* TODO: Error handling */
-		}
-		/* an encrypted block */
-		e_block = result.block;
-
-		if (is_filedata_rq(rq) && dev_id != actual_id) {
-			e_block = FILEDATA;
-		}
-		struct arm_smccc_res res;
-#if 0
-		lwg("[%d:%d]:[%d ==> %x]\n",
-				dev_id,
-				req_op(rq),
-				(uint32_t)sector,
-				(uint32_t) e_block);
-#endif 
-		arm_smccc_smc(ENIGMA_SMC_CALL, req_op(rq), (uint32_t) e_block, dev_id,	0x0, 0x0, 0x0, 0x0, &res);
-
-		/* -----------lwg: the following is 'emulated' disk ops in tz ------------
-		 * -----------     it is considered to be part of our TCB  --------------*/
-		/*lwg("get res = %lx, %lx, %lx, %lx\n", res.a0, res.a1, res.a2, res.a3);*/
-
-		/*decrypt_btt_entry(&e_block);*/
-		e_block = res.a0;
-
-		/* TODO: update as directed by TZ not on all write */
-		if (need_update_btt(rq, e_block)) {
-			update_btt(dev_id, (btt_e)sector, e_block);
-		}
-
-		/* the following code rejects rogue read & discard filedata write:
-		 * initially, all blocks' btt entries are NULL_BLK -- read will return sector 0, reserved for all 0's
-		 * write to these blocks must come with e_block of FILEDATA -- this goes to the 2nd branch which directly returns
-		 * subsequent read to these filedata blocks will also go to the 2nd branch which directly returns/omitted */
-		if (dev_id != actual_id) {
-			if (e_block == NULL_BLK) {
-				/* reserve sector 0 for all 0's */
-				sector = 0;
-			} if (e_block == FILEDATA) {
-			/* filedata path */
-				int bytes = blk_rq_bytes(rq);
-				/*lwg("[%d:%ld:%p] filedata, ommitting %d bytes..\n", dev_id, sector, bio_page(rq->bio), bytes);*/
-				/* clear page bit flags at the final sector in case the page gets recycled */
-#if 0  /* lwg: we clear page bit in the cmd completion phase */
-				if (is_last_req(rq)) {
-					/*clear_filedata_flag(rq);*/
-				}
-#endif 
-				return 0;
-			} else {
-				sector = e_block;
-				if (sector > get_loop_size(lo, lo->lo_backing_file)) {
-					printk("sector = %lld, lo size = %lld\n", get_loop_size(lo, lo->lo_backing_file));
-					BUG_ON(1);
-				}
-			}
-		}
-
-	}
 	/* --- lwg: below is the trusted part where we emulate the in-TZ disk driver ---- */
-	/*loff_t pos = (sector << 9) + lo->lo_offset;*/
-	loff_t pos = sector;
+	if (!has_btt_for_device(lo->lo_number)) {
+		/* original implementation... */
+		pos = (sector << 9) + lo->lo_offset;
+	} else {
+		/* we pass in sector not file pos */
+		pos = sector;
+	}
 	/*
 	 * lo_write_simple and lo_read_simple should have been covered
 	 * by io submit style function like lo_rw_aio(), one blocker
@@ -1106,11 +1143,11 @@ static int loop_set_fd(struct loop_device *lo, fmode_t mode,
 	if (has_enigma_cb()) {
 		struct gendisk *disk = lo->lo_disk;
 		init_btt_for_device(lo->lo_number);
-		disk->flags |= GENHD_HAS_BTT;
 		/* dirty, we let loop0 be actual, other will get btt from loop1 */
 		if (lo->lo_number > 1) {
 			copy_btt(1, lo->lo_number);
 		}
+		disk->flags |= GENHD_HAS_BTT;
 	}
 	return 0;
 
@@ -2273,7 +2310,7 @@ static int __init loop_init(void)
 	printk(KERN_INFO "loop: module loaded\n");
 
 	// lwg: one-time init of enigma loop cb -- turn off for strawman approach
-	/*init_enigma_cb();*/
+	init_enigma_cb();
 	return 0;
 
 misc_out:
