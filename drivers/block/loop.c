@@ -350,33 +350,37 @@ static int lo_write_bvec(struct loop_device *lo, struct file *file, struct bio_v
 {
 	struct iov_iter i[8];
 	ssize_t bw;
-	int k;
+	int k, orig_len;
 	/* split sector at this level */
 	loff_t pos_iter, sector_iter;
 	uint8_t sector_cnt = (bvec->bv_len >> 9);
 	bw = 0;
 	sector_iter = *ppos;
+	orig_len = bvec->bv_len;
 
 	file_start_write(file);
 	if (has_btt_for_device(lo->lo_number)) {
 		/* our path */
-		lwg("starting sec = %lld\n", sector_iter);
-		for (k = 0; k < sector_cnt; k++) {
+		/* does not seem right to change this value */
+		/*bvec->bv_len = (1 << 9);*/
+		for (k = 0; k < sector_cnt; k++, sector_iter++) {
 			iov_iter_bvec(&i[k], ITER_BVEC | WRITE, bvec, 1, 1 << 9);
+			/*i[k].iov_offset = (bvec->bv_offset + (k << 9));*/
+			bvec->bv_offset += (k << 9);
 			btt_e disk_blk = get_disk_blk(lo->lo_number, sector_iter, bvec->bv_page, REQ_OP_WRITE);
 			pos_iter = disk_blk << 9;
-			lwg("writing [%lld->%d]\n", sector_iter, disk_blk);
+			lwg("writing [%lld->%d], offset = %d\n", sector_iter, disk_blk, i[k].iov_offset);
 			bw += vfs_iter_write(file, &i[k], &pos_iter, 0);
-			++sector_iter;
 		}
 	} else {
 		/* original semantics */
 		iov_iter_bvec(&i[0], ITER_BVEC | WRITE, bvec, 1, bvec->bv_len);
-		bw = vfs_iter_write(file, &i[k], ppos, 0);
+		bw = vfs_iter_write(file, &i[0], ppos, 0);
 	}
 	file_end_write(file);
 
-	if (likely(bw ==  bvec->bv_len))
+	/*if (likely(bw ==  bvec->bv_len))*/
+	if (likely(bw == orig_len))
 		return 0;
 
 	printk_ratelimited(KERN_ERR
@@ -396,6 +400,7 @@ static int lo_write_simple(struct loop_device *lo, struct request *rq,
 
 	/* lwg: segment bvec into separate sectors  */
 	rq_for_each_segment(bvec, rq, iter) {
+		lwg("%p, %d, %d\n", bvec.bv_page, bvec.bv_len, bvec.bv_offset);
 		ret = lo_write_bvec(lo, lo->lo_backing_file, &bvec, &pos);
 		if (ret < 0)
 			break;
@@ -466,31 +471,37 @@ static int lo_read_simple(struct loop_device *lo, struct request *rq,
 			}
 		} else {
 			/* our path */
-			int k;
+			int k, orig_len;
 			btt_e disk_blk;
 			loff_t sector_iter, pos_iter;
 			sector_cnt = bvec.bv_len >> 9;
 			BUG_ON(sector_cnt > 8);
 			sector_iter = pos;
-			lwg("starting sec:%lld\n", sector_iter);
-			for (k = 0; k < sector_cnt; k++) {
+			len = 0;
+			orig_len = bvec.bv_len;
+			lwg("%p, %d, %d\n", bvec.bv_page, orig_len, bvec.bv_offset);
+			for (k = 0; k < sector_cnt; k++, sector_iter++) {
 				iov_iter_bvec(&i[k], ITER_BVEC, &bvec, 1, 1 << 9);
+				/*i[k].iov_offset = (bvec.bv_offset + (k << 9));*/
 				disk_blk = get_disk_blk(lo->lo_number, sector_iter, bvec.bv_page, REQ_OP_READ);
 				pos_iter = disk_blk << 9;
-				len = vfs_iter_read(lo->lo_backing_file, &i[k], &pos_iter, 0);
-				if (len < 0)
+				bvec.bv_offset += (k << 9);
+				lwg("reading [%lld->%d], offset = %d\n", sector_iter, disk_blk, i[k].iov_offset);
+				len += vfs_iter_read(lo->lo_backing_file, &i[k], &pos_iter, 0);
+				if (len < 0) {
+					lwg("hello?\n");
 					return len;
-
-				flush_dcache_page(bvec.bv_page);
-
-				if (len != bvec.bv_len) {
-					struct bio *bio;
-
-					__rq_for_each_bio(bio, rq)
-						zero_fill_bio(bio);
-					break;
 				}
-				++sector_iter;
+			}
+			flush_dcache_page(bvec.bv_page);
+			/*if (len != bvec.bv_len) {*/
+			if (len != orig_len) {
+				struct bio *bio;
+
+				__rq_for_each_bio(bio, rq)
+					zero_fill_bio(bio);
+				lwg("hello? len = %d\n", len);
+				break;
 			}
 		}
 #if 0
@@ -793,7 +804,6 @@ static void loop_reread_partitions(struct loop_device *lo,
 	 * must be at least one and it can only become zero when the
 	 * current holder is released.
 	 */
-	lwg("entered..\n");
 	if (!atomic_read(&lo->lo_refcnt))
 		rc = __blkdev_reread_part(bdev);
 	else
