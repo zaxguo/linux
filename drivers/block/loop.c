@@ -350,14 +350,14 @@ static int lo_write_bvec(struct loop_device *lo, struct file *file, struct bio_v
 {
 	struct iov_iter i[8];
 	ssize_t bw;
-	int k, orig_len;
+	int k, orig_len, start_off;
 	/* split sector at this level */
 	loff_t pos_iter, sector_iter;
 	uint8_t sector_cnt = (bvec->bv_len >> 9);
 	bw = 0;
 	sector_iter = *ppos;
 	orig_len = bvec->bv_len;
-
+	start_off = bvec->bv_offset;
 	file_start_write(file);
 	if (has_btt_for_device(lo->lo_number)) {
 		/* our path */
@@ -366,10 +366,10 @@ static int lo_write_bvec(struct loop_device *lo, struct file *file, struct bio_v
 		for (k = 0; k < sector_cnt; k++, sector_iter++) {
 			iov_iter_bvec(&i[k], ITER_BVEC | WRITE, bvec, 1, 1 << 9);
 			/*i[k].iov_offset = (bvec->bv_offset + (k << 9));*/
-			bvec->bv_offset += (k << 9);
+			bvec->bv_offset = start_off + (k << 9);
 			btt_e disk_blk = get_disk_blk(lo->lo_number, sector_iter, bvec->bv_page, REQ_OP_WRITE);
 			pos_iter = disk_blk << 9;
-			lwg("writing [%lld->%d], offset = %d\n", sector_iter, disk_blk, i[k].iov_offset);
+			lwg("writing [%lld->%d], bv offset = %d\n", sector_iter, disk_blk, bvec->bv_offset);
 			bw += vfs_iter_write(file, &i[k], &pos_iter, 0);
 		}
 	} else {
@@ -471,7 +471,7 @@ static int lo_read_simple(struct loop_device *lo, struct request *rq,
 			}
 		} else {
 			/* our path */
-			int k, orig_len;
+			int k, orig_len, start_off;
 			btt_e disk_blk;
 			loff_t sector_iter, pos_iter;
 			sector_cnt = bvec.bv_len >> 9;
@@ -479,14 +479,15 @@ static int lo_read_simple(struct loop_device *lo, struct request *rq,
 			sector_iter = pos;
 			len = 0;
 			orig_len = bvec.bv_len;
+			start_off = bvec.bv_offset;
 			lwg("%p, %d, %d\n", bvec.bv_page, orig_len, bvec.bv_offset);
 			for (k = 0; k < sector_cnt; k++, sector_iter++) {
 				iov_iter_bvec(&i[k], ITER_BVEC, &bvec, 1, 1 << 9);
 				/*i[k].iov_offset = (bvec.bv_offset + (k << 9));*/
 				disk_blk = get_disk_blk(lo->lo_number, sector_iter, bvec.bv_page, REQ_OP_READ);
 				pos_iter = disk_blk << 9;
-				bvec.bv_offset += (k << 9);
-				lwg("reading [%lld->%d], offset = %d\n", sector_iter, disk_blk, i[k].iov_offset);
+				bvec.bv_offset = start_off + (k << 9);
+				lwg("reading [%lld->%d], offset = %d\n", sector_iter, disk_blk, bvec.bv_offset);
 				len += vfs_iter_read(lo->lo_backing_file, &i[k], &pos_iter, 0);
 				if (len < 0) {
 					lwg("hello?\n");
