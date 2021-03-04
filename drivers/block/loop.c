@@ -299,7 +299,8 @@ static btt_e get_disk_blk(int dev_id, btt_e sector, struct page *pg, int req_op)
 	}
 	/* an encrypted block */
 	e_block = result.block;
-	if (is_filedata_blk(pg) && dev_id != actual_id) {
+	if (is_filedata_blk(pg) && (dev_id != actual_id)) {
+		/*lwg("[%d:%lld] filedata\n", dev_id, sector);*/
 		e_block = FILEDATA;
 	}
 	struct arm_smccc_res res;
@@ -330,19 +331,26 @@ static btt_e get_disk_blk(int dev_id, btt_e sector, struct page *pg, int req_op)
 		}
 		switch (e_block) {
 			case NULL_BLK:
-			/* reserve sector 0 for all 0's */
-				return 0;
+				/* reserve sector 0 for all 0's */
+				e_block = 0;
+				break;
 			case FILEDATA:
-				return FILEDATA;
+				if (req_op == REQ_OP_WRITE) {
+					e_block = FILEDATA;
+				/* read to sybil images' filedata blocks will get rejected by 0's */
+				} else if (req_op == REQ_OP_READ) {
+					/*lwg("feeding 0s t %lld\n", e_block);*/
+					e_block = 0;
+				}
+				break;
 			default:
 				/*if (e_block > get_loop_size(lo, lo->lo_backing_file)) {*/
 					/*printk("sector = %lld, lo size = %lld\n", get_loop_size(lo, lo->lo_backing_file));*/
 					/*BUG_ON(1);*/
 				/*}*/
-				return e_block;
+				break;
 		}
 	}
-	/* actual disk */
 	return e_block;
 }
 
@@ -361,13 +369,16 @@ static int lo_write_bvec(struct loop_device *lo, struct file *file, struct bio_v
 	file_start_write(file);
 	if (has_btt_for_device(lo->lo_number)) {
 		/* our path */
-		/* does not seem right to change this value */
-		/*bvec->bv_len = (1 << 9);*/
 		for (k = 0; k < sector_cnt; k++, sector_iter++) {
 			iov_iter_bvec(&i[k], ITER_BVEC | WRITE, bvec, 1, 1 << 9);
-			/*i[k].iov_offset = (bvec->bv_offset + (k << 9));*/
 			bvec->bv_offset = start_off + (k << 9);
 			btt_e disk_blk = get_disk_blk(lo->lo_number, sector_iter, bvec->bv_page, REQ_OP_WRITE);
+			if (disk_blk == FILEDATA) {
+				/* omit data write */
+				bw += (1 << 9);
+				lwg("omitting writing %lld\n", sector_iter);
+				continue;
+			}
 			pos_iter = disk_blk << 9;
 			lwg("writing [%lld->%d], bv offset = %d\n", sector_iter, disk_blk, bvec->bv_offset);
 			bw += vfs_iter_write(file, &i[k], &pos_iter, 0);
@@ -400,7 +411,7 @@ static int lo_write_simple(struct loop_device *lo, struct request *rq,
 
 	/* lwg: segment bvec into separate sectors  */
 	rq_for_each_segment(bvec, rq, iter) {
-		lwg("%p, %d, %d\n", bvec.bv_page, bvec.bv_len, bvec.bv_offset);
+		/*lwg("%p, %d, %d\n", bvec.bv_page, bvec.bv_len, bvec.bv_offset);*/
 		ret = lo_write_bvec(lo, lo->lo_backing_file, &bvec, &pos);
 		if (ret < 0)
 			break;
@@ -480,14 +491,13 @@ static int lo_read_simple(struct loop_device *lo, struct request *rq,
 			len = 0;
 			orig_len = bvec.bv_len;
 			start_off = bvec.bv_offset;
-			lwg("%p, %d, %d\n", bvec.bv_page, orig_len, bvec.bv_offset);
+			/*lwg("%p, %d, %d\n", bvec.bv_page, orig_len, bvec.bv_offset);*/
 			for (k = 0; k < sector_cnt; k++, sector_iter++) {
 				iov_iter_bvec(&i[k], ITER_BVEC, &bvec, 1, 1 << 9);
-				/*i[k].iov_offset = (bvec.bv_offset + (k << 9));*/
 				disk_blk = get_disk_blk(lo->lo_number, sector_iter, bvec.bv_page, REQ_OP_READ);
 				pos_iter = disk_blk << 9;
 				bvec.bv_offset = start_off + (k << 9);
-				lwg("reading [%lld->%d], offset = %d\n", sector_iter, disk_blk, bvec.bv_offset);
+				/*lwg("reading [%lld->%d], offset = %d\n", sector_iter, disk_blk, bvec.bv_offset);*/
 				len += vfs_iter_read(lo->lo_backing_file, &i[k], &pos_iter, 0);
 				if (len < 0) {
 					lwg("hello?\n");
@@ -2321,7 +2331,7 @@ static int __init loop_init(void)
 	printk(KERN_INFO "loop: module loaded\n");
 
 	// lwg: one-time init of enigma loop cb -- turn off for strawman approach
-	init_enigma_cb();
+	/*init_enigma_cb();*/
 	return 0;
 
 misc_out:

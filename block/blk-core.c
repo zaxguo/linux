@@ -2330,6 +2330,8 @@ blk_qc_t submit_bio(struct bio *bio)
 	if (bio_has_data(bio)) {
 		unsigned int count;
 		struct gendisk *disk = bio->bi_disk;
+#if 0
+		/* ----------------------------  obsolete impl ------------------*/
 		/* lwg: need to split bio if it is loop device && has btt  */
 		if (!strncmp("loop", disk->disk_name, 4) && (disk->flags & GENHD_HAS_BTT)) {
 			goto normal;
@@ -2440,6 +2442,7 @@ blk_qc_t submit_bio(struct bio *bio)
 			return ret;
 #endif
 		}
+#endif
 normal:
 
 
