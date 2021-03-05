@@ -381,7 +381,7 @@ static int lo_write_bvec(struct loop_device *lo, struct file *file, struct bio_v
 				continue;
 			}
 			pos_iter = disk_blk << 9;
-			/*lwg("writing [%lld->%d], bv offset = %d\n", sector_iter, disk_blk, bvec->bv_offset);*/
+			lwg("writing [%lld->%d], bv offset = %d\n", sector_iter, disk_blk, bvec->bv_offset);
 			bw += vfs_iter_write(file, &i[k], &pos_iter, 0);
 
 			if (!is_filedata_blk(bvec->bv_page)) {
@@ -504,7 +504,7 @@ static int lo_read_simple(struct loop_device *lo, struct request *rq,
 				disk_blk = get_disk_blk(lo->lo_number, sector_iter, bvec.bv_page, REQ_OP_READ);
 				pos_iter = disk_blk << 9;
 				bvec.bv_offset = start_off + (k << 9);
-				/*lwg("reading [%lld->%d], offset = %d\n", sector_iter, disk_blk, bvec.bv_offset);*/
+				lwg("reading [%lld->%d], offset = %d\n", sector_iter, disk_blk, bvec.bv_offset);
 				len += vfs_iter_read(lo->lo_backing_file, &i[k], &pos_iter, 0);
 				if (!is_filedata_blk(bvec.bv_page)) {
 					/* 12 us delay */

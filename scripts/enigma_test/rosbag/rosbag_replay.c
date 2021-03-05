@@ -10,6 +10,7 @@
 
 #define DEFAULT_FS_CNT			4
 #define MAX_RECORDS				8000
+#define BILLION					1E9
 
 struct args {
 	int tid;
@@ -27,9 +28,10 @@ static void *test_write(void *args) {
 	int ret, write_size, total, txt, idx;
 	char dest[50];
 	struct args *arg = (struct args*) args;
-	double start, end, delta;
+	struct timespec start, end;
+	double delta;
 	if (arg->tid == 0) {
-		start = clock();
+		clock_gettime(CLOCK_MONOTONIC, &start);
 	}
 	total = 0;
 	idx = 0;
@@ -46,11 +48,11 @@ static void *test_write(void *args) {
 	} while(ret == write_size);
 	fsync(txt);
 	if (arg->tid == 0) {
-		end = clock();
-		delta = (end - start)/CLOCKS_PER_SEC;
-		printf("has written %d bytes to %s.\n", total, dest);
+		clock_gettime(CLOCK_MONOTONIC, &end);
+		delta = (end.tv_sec - start.tv_sec) + (end.tv_nsec - start.tv_nsec)/BILLION;
 		printf("[%d]: takes %f seconds for actual to finish.\n", fs_cnt, delta);
 	}
+	printf("[%d] has written %d bytes to %s.\n", arg->tid, total, dest);
 }
 
 static int* construct_lib(char *lib_path) {
@@ -93,7 +95,7 @@ int main(int argc, char *argv[]) {
 	if (argc == 2) {
 		fs_cnt = atoi(argv[1]);
 	}
-	printf("rosbad traces replay on %d fses..\n", fs_cnt);
+	printf("rosbag traces replay on %d fses..\n", fs_cnt);
 	for (i = 0; i < fs_cnt; i++) {
 		struct args* arg = malloc(sizeof(struct args));
 		arg->tid = i;
