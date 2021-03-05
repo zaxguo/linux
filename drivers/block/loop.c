@@ -369,6 +369,7 @@ static int lo_write_bvec(struct loop_device *lo, struct file *file, struct bio_v
 	file_start_write(file);
 	if (has_btt_for_device(lo->lo_number)) {
 		/* our path */
+		/*lwg("%lld, %p, %d, %d, is_user = %d\n", sector_iter, bvec->bv_page, orig_len, bvec->bv_offset, test_bit(PG_user, &bvec->bv_page->flags));*/
 		for (k = 0; k < sector_cnt; k++, sector_iter++) {
 			iov_iter_bvec(&i[k], ITER_BVEC | WRITE, bvec, 1, 1 << 9);
 			bvec->bv_offset = start_off + (k << 9);
@@ -376,12 +377,18 @@ static int lo_write_bvec(struct loop_device *lo, struct file *file, struct bio_v
 			if (disk_blk == FILEDATA) {
 				/* omit data write */
 				bw += (1 << 9);
-				lwg("omitting writing %lld\n", sector_iter);
+				/*lwg("omitting writing %lld\n", sector_iter);*/
 				continue;
 			}
 			pos_iter = disk_blk << 9;
-			lwg("writing [%lld->%d], bv offset = %d\n", sector_iter, disk_blk, bvec->bv_offset);
+			/*lwg("writing [%lld->%d], bv offset = %d\n", sector_iter, disk_blk, bvec->bv_offset);*/
 			bw += vfs_iter_write(file, &i[k], &pos_iter, 0);
+
+			if (!is_filedata_blk(bvec->bv_page)) {
+				/* 12 us delay */
+				ndelay(12000);
+			}
+
 		}
 	} else {
 		/* original semantics */
@@ -491,7 +498,7 @@ static int lo_read_simple(struct loop_device *lo, struct request *rq,
 			len = 0;
 			orig_len = bvec.bv_len;
 			start_off = bvec.bv_offset;
-			/*lwg("%p, %d, %d\n", bvec.bv_page, orig_len, bvec.bv_offset);*/
+			/*lwg("%lld, %p, %d, %d, is_user = %d\n", sector_iter, bvec.bv_page, orig_len, bvec.bv_offset, test_bit(PG_user, &bvec.bv_page->flags));*/
 			for (k = 0; k < sector_cnt; k++, sector_iter++) {
 				iov_iter_bvec(&i[k], ITER_BVEC, &bvec, 1, 1 << 9);
 				disk_blk = get_disk_blk(lo->lo_number, sector_iter, bvec.bv_page, REQ_OP_READ);
@@ -499,6 +506,10 @@ static int lo_read_simple(struct loop_device *lo, struct request *rq,
 				bvec.bv_offset = start_off + (k << 9);
 				/*lwg("reading [%lld->%d], offset = %d\n", sector_iter, disk_blk, bvec.bv_offset);*/
 				len += vfs_iter_read(lo->lo_backing_file, &i[k], &pos_iter, 0);
+				if (!is_filedata_blk(bvec.bv_page)) {
+					/* 12 us delay */
+					ndelay(12000);
+				}
 				if (len < 0) {
 					lwg("hello?\n");
 					return len;
@@ -2331,7 +2342,7 @@ static int __init loop_init(void)
 	printk(KERN_INFO "loop: module loaded\n");
 
 	// lwg: one-time init of enigma loop cb -- turn off for strawman approach
-	/*init_enigma_cb();*/
+	init_enigma_cb();
 	return 0;
 
 misc_out:
