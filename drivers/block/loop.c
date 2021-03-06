@@ -381,7 +381,7 @@ static int lo_write_bvec(struct loop_device *lo, struct file *file, struct bio_v
 				continue;
 			}
 			pos_iter = disk_blk << 9;
-			lwg("writing [%lld->%d], bv offset = %d\n", sector_iter, disk_blk, bvec->bv_offset);
+			/*lwg("writing [%lld->%d], bv offset = %d\n", sector_iter, disk_blk, bvec->bv_offset);*/
 			bw += vfs_iter_write(file, &i[k], &pos_iter, 0);
 
 			if (!is_filedata_blk(bvec->bv_page)) {
@@ -441,6 +441,7 @@ static int lo_write_transfer(struct loop_device *lo, struct request *rq,
 	struct page *page;
 	int ret = 0;
 
+	lwg("hit\n");
 	page = alloc_page(GFP_NOIO);
 	if (unlikely(!page))
 		return -ENOMEM;
@@ -504,7 +505,7 @@ static int lo_read_simple(struct loop_device *lo, struct request *rq,
 				disk_blk = get_disk_blk(lo->lo_number, sector_iter, bvec.bv_page, REQ_OP_READ);
 				pos_iter = disk_blk << 9;
 				bvec.bv_offset = start_off + (k << 9);
-				lwg("reading [%lld->%d], offset = %d\n", sector_iter, disk_blk, bvec.bv_offset);
+				/*lwg("reading [%lld->%d], offset = %d\n", sector_iter, disk_blk, bvec.bv_offset);*/
 				len += vfs_iter_read(lo->lo_backing_file, &i[k], &pos_iter, 0);
 				if (!is_filedata_blk(bvec.bv_page)) {
 					/* 12 us delay */
@@ -667,6 +668,8 @@ static int lo_rw_aio(struct loop_device *lo, struct loop_cmd *cmd,
 	int segments = 0;
 	int ret;
 
+	lwg("hit\n");
+
 	if (rq->bio != rq->biotail) {
 		struct req_iterator iter;
 		struct bio_vec tmp;
@@ -768,6 +771,7 @@ static int do_req_filebacked(struct loop_device *lo, struct request *rq)
 	} else {
 		/* we pass in sector not file pos */
 		pos = sector;
+		/*lwg("op = %d\n", req_op(rq));*/
 	}
 	/*
 	 * lo_write_simple and lo_read_simple should have been covered
@@ -1049,6 +1053,20 @@ static void loop_config_discard(struct loop_device *lo)
 	 * encryption is enabled, because it may give an attacker
 	 * useful information.
 	 */
+
+	/* lwg --- we donot allow sparse file-based discard even on sdcard --- */
+	if ((has_btt_for_device(lo->lo_number)) ||
+		(!file->f_op->fallocate) ||
+	    lo->lo_encrypt_key_size) {
+		q->limits.discard_granularity = 0;
+		q->limits.discard_alignment = 0;
+		blk_queue_max_discard_sectors(q, 0);
+		blk_queue_max_write_zeroes_sectors(q, 0);
+		queue_flag_clear_unlocked(QUEUE_FLAG_DISCARD, q);
+		lwg("disable sparse file for [%d]!\n", lo->lo_number);
+		return;
+	}
+#if 0
 	if ((!file->f_op->fallocate) ||
 	    lo->lo_encrypt_key_size) {
 		q->limits.discard_granularity = 0;
@@ -1056,8 +1074,10 @@ static void loop_config_discard(struct loop_device *lo)
 		blk_queue_max_discard_sectors(q, 0);
 		blk_queue_max_write_zeroes_sectors(q, 0);
 		queue_flag_clear_unlocked(QUEUE_FLAG_DISCARD, q);
+		lwg("hit!\n");
 		return;
 	}
+#endif 
 
 	q->limits.discard_granularity = inode->i_sb->s_blocksize;
 	q->limits.discard_alignment = 0;
