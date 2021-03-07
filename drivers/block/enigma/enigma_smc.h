@@ -55,6 +55,7 @@ enum _req_opf {
 #define ENIGMA_RD	_REQ_OP_READ
 #define ENIGMA_WR	_REQ_OP_WRITE
 #define ENIGMA_INCR _REQ_OP_INC_REF
+#define ENIGMA_LOOKUP_BTT	(ENIGMA_INCR+1)
 
 #define ENIGMA_SMC_CALL \
 	OPTEE_SMC_STD_CALL_VAL(0) // the "0" marks it is our SMC

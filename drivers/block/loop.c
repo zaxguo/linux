@@ -320,6 +320,7 @@ static btt_e get_disk_blk(int dev_id, btt_e sector, struct page *pg, int req_op)
 
 	/*decrypt_btt_entry(&e_block);*/
 	e_block = res.a0;
+
 	/* the following code rejects rogue read & discard filedata write:
 	 * initially, all blocks' btt entries are NULL_BLK -- read will return sector 0, reserved for all 0's
 	 * write to these blocks must come with e_block of FILEDATA -- this goes to the 2nd branch which directly returns
@@ -380,6 +381,9 @@ static int lo_write_bvec(struct loop_device *lo, struct file *file, struct bio_v
 				/*lwg("omitting writing %lld\n", sector_iter);*/
 				continue;
 			}
+			/* sanity check */
+			BUG_ON(disk_blk == NULL_BLK);
+
 			pos_iter = disk_blk << 9;
 			/*lwg("writing [%lld->%d], bv offset = %d\n", sector_iter, disk_blk, bvec->bv_offset);*/
 			bw += vfs_iter_write(file, &i[k], &pos_iter, 0);
@@ -2253,6 +2257,12 @@ static const struct file_operations loop_ctl_fops = {
 	.llseek		= noop_llseek,
 };
 
+static btt_e enigma_dump_emu_disk(btt_e blk) {
+	struct arm_smccc_res res;
+	arm_smccc_smc(ENIGMA_SMC_CALL, ENIGMA_LOOKUP_BTT, (uint32_t) blk, 0, 0x0, 0x0, 0x0, 0x0, &res);
+	return res.a0;
+}
+
 static int enigma_dbg_show(struct seq_file *s, void *unused) {
 	char *btt_path = "/tmp/btt";
 	struct file *btt_f = filp_open(btt_path, O_RDWR | O_CREAT, 0);
@@ -2260,9 +2270,15 @@ static int enigma_dbg_show(struct seq_file *s, void *unused) {
 	loff_t pos = 0;
 	for (i = 0; i < BTT_SIZE; i++) {
 		void *entry = kmalloc(128, GFP_KERNEL);
-		struct lookup_result result;
-		err = lookup_block(0, i, &result);
-		snprintf(entry, 128, "%d,%d\n", i, result.block);
+		btt_e cnt;
+#if 0
+		{
+			struct lookup_result result;
+			err = lookup_block(0, i, &result);
+		}
+#endif 
+		cnt = enigma_dump_emu_disk(i);
+		snprintf(entry, 128, "%d,%d\n", i, cnt);
 		kernel_write(btt_f, entry, strlen(entry), &pos);
 	}
 	printk("btt dumped to %s\n", btt_path);
