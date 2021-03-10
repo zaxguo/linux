@@ -312,7 +312,9 @@ static btt_e get_disk_blk(int dev_id, btt_e sector, struct page *pg, int req_op)
 			(uint32_t)sector,
 			(uint32_t) e_block);
 #endif
+
 	arm_smccc_smc(ENIGMA_SMC_CALL, req_op, (uint32_t) e_block, dev_id,	0x0, 0x0, 0x0, 0x0, &res);
+
 
 	/* -----------lwg: the following is 'emulated' disk ops in tz ------------
 	 * -----------     it is considered to be part of our TCB  --------------*/
@@ -374,7 +376,9 @@ static int lo_write_bvec(struct loop_device *lo, struct file *file, struct bio_v
 		for (k = 0; k < sector_cnt; k++, sector_iter++) {
 			iov_iter_bvec(&i[k], ITER_BVEC | WRITE, bvec, 1, 1 << 9);
 			bvec->bv_offset = start_off + (k << 9);
+			mutex_lock(&btt_lock);
 			btt_e disk_blk = get_disk_blk(lo->lo_number, sector_iter, bvec->bv_page, REQ_OP_WRITE);
+			mutex_unlock(&btt_lock);
 			if (disk_blk == FILEDATA) {
 				/* omit data write */
 				bw += (1 << 9);
@@ -387,12 +391,10 @@ static int lo_write_bvec(struct loop_device *lo, struct file *file, struct bio_v
 			pos_iter = disk_blk << 9;
 			/*lwg("writing [%lld->%d], bv offset = %d\n", sector_iter, disk_blk, bvec->bv_offset);*/
 			bw += vfs_iter_write(file, &i[k], &pos_iter, 0);
-
 			if (!is_filedata_blk(bvec->bv_page)) {
 				/* 12 us delay */
 				ndelay(12000);
 			}
-
 		}
 	} else {
 		/* original semantics */

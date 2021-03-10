@@ -12,7 +12,7 @@
 //#define BTT_SIZE (80001)
 #define BTT_SIZE (200001)
 #define BTT_ENTRY_SIZE (sizeof(btt_e))
-#define MAX_DEV		15
+#define MAX_DEV		25
 
 #define BTT_ENC 0
 #define BTT_DEC	1
@@ -22,6 +22,7 @@
 //#define lwg(fmt, ...) 0;
 /* 4-byte unsigned int */
 typedef uint32_t btt_e;
+typedef struct mutex enigma_lock;
 
 struct enigma_cb {
 	btt_e *btt[MAX_DEV];
@@ -36,6 +37,7 @@ struct lookup_result {
 };
 
 extern struct enigma_cb enigma_cb;
+extern enigma_lock btt_lock;
 
 int init_btt_for_device(int lo_number);
 int copy_btt(int from, int to);

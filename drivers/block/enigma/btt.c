@@ -10,11 +10,13 @@
 #include "enigma_types.h"
 #include "enigma_smc.h"
 #include <linux/mutex.h>
+#include <linux/rwlock.h>
 
 
 #define NEEDS_ENDEC		0
 
 struct enigma_cb enigma_cb;
+enigma_lock btt_lock;
 
 // in-place dencryption
 // TODO: move this to TZ
@@ -232,6 +234,7 @@ int init_enigma_cb (void) {
 	struct enigma_cb* cb = &enigma_cb;
 	ret = init_enigma_crypto(&cb->cipher);
 	cb->actual = 0;
+	mutex_init(&btt_lock);
 	lwg("enigma_cb initialized tfm -- %p\n", enigma_cb.cipher);
 	lwg("enigma cb initialized..\n");
 	return 0;
