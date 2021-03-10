@@ -9,6 +9,7 @@
 
 #define DEFAULT_FS_CNT			4
 #define MAX_RECORDS				8000
+#define BILLION					1E9
 
 struct args {
 	int tid;
@@ -43,9 +44,10 @@ static void *replay(void *args) {
 	int ret, size, total, txt, idx;
 	char dest[50];
 	struct args *arg = (struct args*) args;
-	double start, end, delta;
+	struct timespec start, end;
+	double delta;
 	if (arg->tid == 0) {
-		start = clock();
+		clock_gettime(CLOCK_MONOTONIC, &start);
 	}
 	total = 0;
 	idx = 0;
@@ -68,11 +70,11 @@ static void *replay(void *args) {
 	} while(idx < lib.cnt);
 	fsync(txt);
 	if (arg->tid == 0) {
-		end = clock();
-		delta = (end - start)/CLOCKS_PER_SEC;
-		printf("replayed %d ops: rw %d bytes to %s.\n", idx, total, dest);
+		clock_gettime(CLOCK_MONOTONIC, &end);
+		delta = (end.tv_sec - start.tv_sec) + (end.tv_nsec - start.tv_nsec)/BILLION;
 		printf("[%d]: takes %f seconds for actual to finish.\n", fs_cnt, delta);
 	}
+	printf("[%d]:replayed %d ops: rw %d bytes to %s.\n", arg->tid, idx, total, dest);
 }
 
 static int construct_lib(char *lib_path) {
