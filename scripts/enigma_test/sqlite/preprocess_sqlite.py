@@ -1,7 +1,7 @@
 import os
 import sys
 
-f = open('./strace', 'r')
+f = open('./selectA', 'r')
 out = open('./strace_post', 'w')
 
 for line in f:
