@@ -2,7 +2,7 @@
 echo "fs = $1"
 #dd if=/dev/zero of=loop.img bs=1k count=40000
 dd if=/dev/zero of=loop.img bs=1k count=2097152 # 2GB disk
-# overprovision the disk for sybil
+# must overprovision the sybil disk to make as large actual fs
 dd if=/dev/zero of=loop_sybil.img bs=1k count=100000
 
 # setup loop device

@@ -96,16 +96,17 @@ int update_btt(int dev_id, btt_e vblk, btt_e e_blk) {
 }
 
 btt_e *alloc_btt(unsigned long size) {
-	btt_e *ret = kmalloc(sizeof(btt_e) * size, GFP_KERNEL);
+	unsigned long alloc_size = size * sizeof(btt_e);
+	btt_e *ret = kmalloc(alloc_size, GFP_KERNEL);
 	if (!ret) {
-		lwg("try vmalloc instead... size = %ld\n", size);
-		ret = vmalloc(size);
+		lwg("try vmalloc instead... size = %ld\n", alloc_size);
+		ret = vmalloc(alloc_size);
 		if (!ret) {
 			lwg("still cannot alloc btt!!\n");
 			return NULL;
 		}
 	}
-	lwg("btt [size:%ld] allocated...\n", size);
+	lwg("btt [entries:%ld] allocated...\n", size);
 	return ret;
 }
 

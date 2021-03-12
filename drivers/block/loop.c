@@ -2288,6 +2288,10 @@ static int enigma_dbg_show(struct seq_file *s, void *unused) {
 		cnt = enigma_dump_emu_disk(i);
 		snprintf(entry, 128, "%d,%d\n", i, cnt);
 		kernel_write(btt_f, entry, strlen(entry), &pos);
+		if (cnt == -1) {
+			lwg("stopped at %d\n", i);
+			break;
+		}
 	}
 	printk("btt dumped to %s\n", btt_path);
 	return 0;
@@ -2387,12 +2391,6 @@ static int __init loop_init(void)
 
 	// lwg: one-time init of enigma loop cb -- turn off for strawman approach
 	init_enigma_cb();
-	void *test = vmalloc(4194304 * 4);
-	if (test) {
-		lwg("alloc large btt succ!\n");
-	} else {
-		lwg("err = %p\n", test);
-	}
 	return 0;
 
 misc_out:
