@@ -10,7 +10,9 @@
 
 //#define BTT_SIZE (6001)
 //#define BTT_SIZE (80001)
-#define BTT_SIZE (200001)
+//#define BTT_SIZE (200001)
+/* # of BTT entries == actual disk sector */
+#define BTT_SIZE	btt_size
 #define BTT_ENTRY_SIZE (sizeof(btt_e))
 #define MAX_DEV		25
 
@@ -38,6 +40,7 @@ struct lookup_result {
 
 extern struct enigma_cb enigma_cb;
 extern enigma_lock btt_lock;
+extern int btt_size;
 
 int init_btt_for_device(int lo_number);
 int copy_btt(int from, int to);

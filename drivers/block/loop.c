@@ -84,6 +84,7 @@
 
 #include <linux/uaccess.h>
 #include <linux/proc_fs.h>
+#include <linux/vmalloc.h>
 
 static DEFINE_IDR(loop_index_idr);
 static DEFINE_MUTEX(loop_index_mutex);
@@ -91,6 +92,7 @@ static DEFINE_MUTEX(loop_index_mutex);
 static int max_part;
 static int part_shift;
 static int actual_id = 0;
+int btt_size = 0;
 
 static int transfer_xor(struct loop_device *lo, int cmd,
 			struct page *raw_page, unsigned raw_off,
@@ -1151,7 +1153,11 @@ static int loop_set_fd(struct loop_device *lo, fmode_t mode,
 
 	error = -EFBIG;
 	size = get_loop_size(lo, file);
-	printk("lo %d, size = %lld\n", lo->lo_number, size);
+	lwg("lo %d, size = %lld\n", lo->lo_number, size);
+	if (lo->lo_number == actual_id) {
+		btt_size = (int)size;
+		lwg("setting BTT size to %d\n", btt_size);
+	}
 	if ((loff_t)(sector_t)size != size)
 		goto out_putf;
 	error = loop_prepare_queue(lo);
@@ -2381,6 +2387,12 @@ static int __init loop_init(void)
 
 	// lwg: one-time init of enigma loop cb -- turn off for strawman approach
 	init_enigma_cb();
+	void *test = vmalloc(4194304 * 4);
+	if (test) {
+		lwg("alloc large btt succ!\n");
+	} else {
+		lwg("err = %p\n", test);
+	}
 	return 0;
 
 misc_out:
