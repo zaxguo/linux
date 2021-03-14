@@ -117,18 +117,23 @@ static int construct_lib(char *lib_path) {
 static int setup_db(int fs) {
 	char dest[50];
 	char *data;
-	int ret, size, txt;
+	int ret, size, txt, cnt;
 	unsigned long total;
 	total = 0;
 	size = 4096;
 	data = malloc(5000);
 	memset(data, 'a', size);
+	cnt = 0;
 	ret = snprintf(dest, 50, "/sybil/fs%d/cf.dat", fs);
 	txt = open(dest, O_RDWR);
 	do {
 		ret = write(txt, data, size);
 		if (ret) {
 			total += ret;
+		}
+		if (((cnt++) % 256) == 0) {
+			printf("%d MB...\n", (int)(total >> 20));
+			fsync(txt);
 		}
 	} while (ret == size);
 	printf("dumping %ld bytes to sbily fs %d\n", total, fs);
@@ -149,7 +154,7 @@ int main(int argc, char *argv[]) {
 		exit(0);
 	}
 	/*ret = construct_lib(trace_path);*/
-	ret = setup_db(1);
+	ret = setup_db(0);
 	return 0;
 	/* prepare the data buffer */
 	data = malloc(9000);

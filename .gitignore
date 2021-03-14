@@ -43,6 +43,7 @@
 Module.symvers
 modules.builtin
 flags
+a.out
 #
 # Top-level generic files
 #

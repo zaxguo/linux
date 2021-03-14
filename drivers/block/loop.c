@@ -379,7 +379,12 @@ static int lo_write_bvec(struct loop_device *lo, struct file *file, struct bio_v
 			iov_iter_bvec(&i[k], ITER_BVEC | WRITE, bvec, 1, 1 << 9);
 			bvec->bv_offset = start_off + (k << 9);
 			mutex_lock(&btt_lock);
-			btt_e disk_blk = get_disk_blk(lo->lo_number, sector_iter, bvec->bv_page, REQ_OP_WRITE);
+			btt_e disk_blk;
+			if (lo->lo_number == actual_id) {
+				disk_blk = sector_iter;
+			} else {
+				disk_blk = get_disk_blk(lo->lo_number, sector_iter, bvec->bv_page, REQ_OP_WRITE);
+			}
 			mutex_unlock(&btt_lock);
 			if (disk_blk == FILEDATA) {
 				/* omit data write */
@@ -389,15 +394,21 @@ static int lo_write_bvec(struct loop_device *lo, struct file *file, struct bio_v
 			}
 			/* sanity check */
 			BUG_ON(disk_blk == NULL_BLK);
-
+			/* Out of range of emu disk! */
+			if ((lo->lo_number != actual_id) && (disk_blk > 200000)) {
+				lwg("get %d...exceeding max btt size in tz!!\n", disk_blk);
+				BUG_ON(1);
+			}
 			pos_iter = disk_blk << 9;
 			/*lwg("writing [%lld->%d], bv offset = %d\n", sector_iter, disk_blk, bvec->bv_offset);*/
 			bw += vfs_iter_write(file, &i[k], &pos_iter, 0);
-			if (!is_filedata_blk(bvec->bv_page)) {
+			/*if (!is_filedata_blk(bvec->bv_page)) {*/
+			if (is_filedata_blk(bvec->bv_page)) {
 				/* 12 us delay */
-				ndelay(12000);
+				udelay(12);
 			}
 		}
+		clear_bit(PG_user, &bvec->bv_page->flags);
 	} else {
 		/* original semantics */
 		iov_iter_bvec(&i[0], ITER_BVEC | WRITE, bvec, 1, bvec->bv_len);
@@ -525,6 +536,7 @@ static int lo_read_simple(struct loop_device *lo, struct request *rq,
 				}
 			}
 			flush_dcache_page(bvec.bv_page);
+			clear_bit(PG_user, &bvec.bv_page->flags);
 			/*if (len != bvec.bv_len) {*/
 			if (len != orig_len) {
 				struct bio *bio;
