@@ -126,6 +126,10 @@ static int setup_db(int fs) {
 	cnt = 0;
 	ret = snprintf(dest, 50, "/sybil/fs%d/cf.dat", fs);
 	txt = open(dest, O_RDWR);
+	if (!txt) {
+		printf("fail to open %s!\n", dest);
+		return 0;
+	}
 	do {
 		ret = write(txt, data, size);
 		if (ret) {

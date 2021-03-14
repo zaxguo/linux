@@ -365,25 +365,26 @@ static int lo_write_bvec(struct loop_device *lo, struct file *file, struct bio_v
 	ssize_t bw;
 	int k, orig_len, start_off;
 	/* split sector at this level */
-	loff_t pos_iter, sector_iter;
+	loff_t pos_iter;
+	loff_t *sector_iter;
 	uint8_t sector_cnt = (bvec->bv_len >> 9);
 	bw = 0;
-	sector_iter = *ppos;
+	sector_iter = ppos;
 	orig_len = bvec->bv_len;
 	start_off = bvec->bv_offset;
 	file_start_write(file);
 	if (has_btt_for_device(lo->lo_number)) {
 		/* our path */
 		/*lwg("%lld, %p, %d, %d, is_user = %d\n", sector_iter, bvec->bv_page, orig_len, bvec->bv_offset, test_bit(PG_user, &bvec->bv_page->flags));*/
-		for (k = 0; k < sector_cnt; k++, sector_iter++) {
+		for (k = 0; k < sector_cnt; k++, (*sector_iter)++) {
 			iov_iter_bvec(&i[k], ITER_BVEC | WRITE, bvec, 1, 1 << 9);
 			bvec->bv_offset = start_off + (k << 9);
 			mutex_lock(&btt_lock);
 			btt_e disk_blk;
 			if (lo->lo_number == actual_id) {
-				disk_blk = sector_iter;
+				disk_blk = (btt_e)*sector_iter;
 			} else {
-				disk_blk = get_disk_blk(lo->lo_number, sector_iter, bvec->bv_page, REQ_OP_WRITE);
+				disk_blk = get_disk_blk(lo->lo_number, *sector_iter, bvec->bv_page, REQ_OP_WRITE);
 			}
 			mutex_unlock(&btt_lock);
 			if (disk_blk == FILEDATA) {
@@ -437,7 +438,7 @@ static int lo_write_simple(struct loop_device *lo, struct request *rq,
 
 	/* lwg: segment bvec into separate sectors  */
 	rq_for_each_segment(bvec, rq, iter) {
-		/*lwg("%p, %d, %d\n", bvec.bv_page, bvec.bv_len, bvec.bv_offset);*/
+		lwg("%p, %d, %d, %lld\n", bvec.bv_page, bvec.bv_len, bvec.bv_offset, pos);
 		ret = lo_write_bvec(lo, lo->lo_backing_file, &bvec, &pos);
 		if (ret < 0)
 			break;
@@ -518,7 +519,7 @@ static int lo_read_simple(struct loop_device *lo, struct request *rq,
 			len = 0;
 			orig_len = bvec.bv_len;
 			start_off = bvec.bv_offset;
-			/*lwg("%lld, %p, %d, %d, is_user = %d\n", sector_iter, bvec.bv_page, orig_len, bvec.bv_offset, test_bit(PG_user, &bvec.bv_page->flags));*/
+			lwg("%lld, %p, %d, %d, is_user = %d\n", sector_iter, bvec.bv_page, orig_len, bvec.bv_offset, test_bit(PG_user, &bvec.bv_page->flags));
 			for (k = 0; k < sector_cnt; k++, sector_iter++) {
 				iov_iter_bvec(&i[k], ITER_BVEC, &bvec, 1, 1 << 9);
 				disk_blk = get_disk_blk(lo->lo_number, sector_iter, bvec.bv_page, REQ_OP_READ);
