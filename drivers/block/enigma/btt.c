@@ -186,7 +186,7 @@ static int alloc_block(int lo, btt_e vblock, struct lookup_result *re) {
 	return 0;
 }
 
-int lookup_block(int lo, btt_e vblock, struct lookup_result *re) {
+btt_e lookup_block(int lo, btt_e vblock, struct lookup_result *re) {
 	if (!has_enigma_cb()) {
 		return LOOKUP_FAIL;
 	}
@@ -205,11 +205,7 @@ int lookup_block(int lo, btt_e vblock, struct lookup_result *re) {
 		}
 	}
 #endif
-	re->block = pblock;
-	/* TODO: remove
-	 * Normal world does not if it is shared or not */
-	re->shared = false;
-	return 0;
+	return pblock;
 }
 
 static inline void incr_blk_ref(btt_e pblk) {

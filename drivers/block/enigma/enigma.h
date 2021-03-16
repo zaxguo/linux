@@ -49,7 +49,7 @@ int free_btt(btt_e *btt);
 int update_btt(int dev_id, btt_e vblk, btt_e eblk);
 int init_enigma_cb(void);
 int decrypt_btt_entry(btt_e *btt);
-int lookup_block(int lo, btt_e vblock, struct lookup_result *re);
+btt_e lookup_block(int lo, btt_e vblock, struct lookup_result *re);
 
 static inline int has_enigma_cb(void) {
 	return (enigma_cb.cipher != NULL);

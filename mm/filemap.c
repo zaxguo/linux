@@ -1031,7 +1031,7 @@ static inline int wait_on_page_bit_common(wait_queue_head_t *q,
 
 void wait_on_page_bit(struct page *page, int bit_nr)
 {
-	/*printk("lwg:%s:%d:waiting on page %p\n", __func__, __LINE__, page);*/
+	/*printk("lwg:%s:%d:waiting on page %p, bit_nr = %d\n", __func__, __LINE__, page, bit_nr);*/
 	wait_queue_head_t *q = page_waitqueue(page);
 	wait_on_page_bit_common(q, page, bit_nr, TASK_UNINTERRUPTIBLE, false);
 	/*printk("lwg:%s:%d:done waiting on page %p\n", __func__, __LINE__, page);*/
@@ -3044,10 +3044,10 @@ again:
 		struct timespec64 start, end, delta;
 
 		/* lwg: tag pages copied from user buf */
-		getnstimeofday64(&start);
+		/*getnstimeofday64(&start);*/
 		copied = iov_iter_copy_from_user_atomic(page, i, offset, bytes);
-		getnstimeofday64(&end);
-		delta = timespec64_sub(end, start);
+		/*getnstimeofday64(&end);*/
+		/*delta = timespec64_sub(end, start);*/
 
 		if (!strncmp(current->comm, "a.out", sizeof("a.out"))) {
 			/*printk("lwg:%s:%d:comm = %s, copied %ld bytes to page %p, offset = %ld, ns = %lld\n", __func__, __LINE__, current->comm, copied, page, offset, timespec64_to_ns(&delta));*/

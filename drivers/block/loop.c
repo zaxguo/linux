@@ -293,34 +293,29 @@ static btt_e get_disk_blk(int dev_id, btt_e sector, struct page *pg, int req_op)
 	}
 	/* btt translation */
 	btt_e e_block;
-	int err;
-	struct lookup_result result;
-	err = lookup_block(dev_id, sector, &result);
-	if (err) {
-		/* TODO: Error handling */
-	}
+	/*struct lookup_result result;*/
 	/* an encrypted block */
-	e_block = result.block;
+	e_block = lookup_block(dev_id, sector, NULL);
+	/*e_block = result.block;*/
 	if (is_filedata_blk(pg) && (dev_id != actual_id)) {
 		/*lwg("[%d:%lld] filedata\n", dev_id, sector);*/
 		e_block = FILEDATA;
 	}
 	struct arm_smccc_res res;
-#if 0
+#if 1
 	/* some debugging */
-	lwg("[%d:%d]:[%d ==> %x]\n",
+	lwg("[%d:%d]:[%d ==> %d]\n",
 			dev_id,
 			req_op,
 			(uint32_t)sector,
-			(uint32_t) e_block);
+			(uint32_t)e_block);
 #endif
 
 	arm_smccc_smc(ENIGMA_SMC_CALL, req_op, (uint32_t) e_block, dev_id,	0x0, 0x0, 0x0, 0x0, &res);
 
-
 	/* -----------lwg: the following is 'emulated' disk ops in tz ------------
 	 * -----------     it is considered to be part of our TCB  --------------*/
-	/*lwg("get res = %lx, %lx, %lx, %lx\n", res.a0, res.a1, res.a2, res.a3);*/
+	/*lwg("get res = %ld, %lx, %lx, %lx\n", res.a0, res.a1, res.a2, res.a3);*/
 
 	/*decrypt_btt_entry(&e_block);*/
 	e_block = res.a0;
@@ -381,16 +376,19 @@ static int lo_write_bvec(struct loop_device *lo, struct file *file, struct bio_v
 			bvec->bv_offset = start_off + (k << 9);
 			mutex_lock(&btt_lock);
 			btt_e disk_blk;
+#if 1
 			if (lo->lo_number == actual_id) {
 				disk_blk = (btt_e)*sector_iter;
 			} else {
 				disk_blk = get_disk_blk(lo->lo_number, *sector_iter, bvec->bv_page, REQ_OP_WRITE);
 			}
+#endif
 			mutex_unlock(&btt_lock);
 			if (disk_blk == FILEDATA) {
 				/* omit data write */
 				bw += (1 << 9);
 				/*lwg("omitting writing %lld\n", sector_iter);*/
+				/*mdelay(1);*/
 				continue;
 			}
 			/* sanity check */
@@ -403,11 +401,6 @@ static int lo_write_bvec(struct loop_device *lo, struct file *file, struct bio_v
 			pos_iter = disk_blk << 9;
 			/*lwg("writing [%lld->%d], bv offset = %d\n", sector_iter, disk_blk, bvec->bv_offset);*/
 			bw += vfs_iter_write(file, &i[k], &pos_iter, 0);
-			/*if (!is_filedata_blk(bvec->bv_page)) {*/
-			if (is_filedata_blk(bvec->bv_page)) {
-				/* 12 us delay */
-				udelay(12);
-			}
 		}
 		clear_bit(PG_user, &bvec->bv_page->flags);
 	} else {
@@ -438,7 +431,7 @@ static int lo_write_simple(struct loop_device *lo, struct request *rq,
 
 	/* lwg: segment bvec into separate sectors  */
 	rq_for_each_segment(bvec, rq, iter) {
-		lwg("%p, %d, %d, %lld\n", bvec.bv_page, bvec.bv_len, bvec.bv_offset, pos);
+		/*lwg("%p, %d, %d, %lld\n", bvec.bv_page, bvec.bv_len, bvec.bv_offset, pos);*/
 		ret = lo_write_bvec(lo, lo->lo_backing_file, &bvec, &pos);
 		if (ret < 0)
 			break;
@@ -492,6 +485,8 @@ static int lo_read_simple(struct loop_device *lo, struct request *rq,
 	struct iov_iter i[8];
 	ssize_t len;
 	unsigned int sector_cnt;
+	loff_t sector_iter, pos_iter;
+	sector_iter = pos;
 	rq_for_each_segment(bvec, rq, iter) {
 		if (!has_btt_for_device(lo->lo_number)) {
 			iov_iter_bvec(&i[0], ITER_BVEC, &bvec, 1, bvec.bv_len);
@@ -510,34 +505,48 @@ static int lo_read_simple(struct loop_device *lo, struct request *rq,
 			}
 		} else {
 			/* our path */
-			int k, orig_len, start_off;
+			int k, orig_len, start_off, should_skip;
 			btt_e disk_blk;
-			loff_t sector_iter, pos_iter;
 			sector_cnt = bvec.bv_len >> 9;
 			BUG_ON(sector_cnt > 8);
-			sector_iter = pos;
 			len = 0;
 			orig_len = bvec.bv_len;
 			start_off = bvec.bv_offset;
-			lwg("%lld, %p, %d, %d, is_user = %d\n", sector_iter, bvec.bv_page, orig_len, bvec.bv_offset, test_bit(PG_user, &bvec.bv_page->flags));
+			should_skip = 0;
+			if (sector_iter == 2120 || sector_iter == 2176) {
+				should_skip = 1;
+			}
+			lwg("%lld, %p, %d, %d, is_user = %d, in_irq = %d, in_atomic = %d\n", sector_iter, bvec.bv_page, orig_len, bvec.bv_offset, test_bit(PG_user, &bvec.bv_page->flags), in_interrupt(), in_atomic());
 			for (k = 0; k < sector_cnt; k++, sector_iter++) {
 				iov_iter_bvec(&i[k], ITER_BVEC, &bvec, 1, 1 << 9);
-				disk_blk = get_disk_blk(lo->lo_number, sector_iter, bvec.bv_page, REQ_OP_READ);
+				if (should_skip) {
+					disk_blk = (btt_e)sector_iter;
+				} else {
+					disk_blk = get_disk_blk(lo->lo_number, sector_iter, bvec.bv_page, REQ_OP_READ);
+				}
+#if 0
+				if (lo->lo_number != actual_id) {
+					disk_blk = get_disk_blk(lo->lo_number, sector_iter, bvec.bv_page, REQ_OP_READ);
+				} else {
+					disk_blk = (btt_e)sector_iter;
+				}
+#endif
 				pos_iter = disk_blk << 9;
 				bvec.bv_offset = start_off + (k << 9);
-				/*lwg("reading [%lld->%d], offset = %d\n", sector_iter, disk_blk, bvec.bv_offset);*/
+				lwg("reading [%lld->%d], offset = %d\n", sector_iter, disk_blk, bvec.bv_offset);
 				len += vfs_iter_read(lo->lo_backing_file, &i[k], &pos_iter, 0);
 				if (!is_filedata_blk(bvec.bv_page)) {
 					/* 12 us delay */
 					ndelay(12000);
+					/*lwg("delay end..\n");*/
 				}
 				if (len < 0) {
 					lwg("hello?\n");
 					return len;
 				}
 			}
-			flush_dcache_page(bvec.bv_page);
 			clear_bit(PG_user, &bvec.bv_page->flags);
+			flush_dcache_page(bvec.bv_page);
 			/*if (len != bvec.bv_len) {*/
 			if (len != orig_len) {
 				struct bio *bio;
@@ -1098,7 +1107,7 @@ static void loop_config_discard(struct loop_device *lo)
 		lwg("hit!\n");
 		return;
 	}
-#endif 
+#endif
 
 	q->limits.discard_granularity = inode->i_sb->s_blocksize;
 	q->limits.discard_alignment = 0;
@@ -2289,6 +2298,10 @@ static int enigma_dbg_show(struct seq_file *s, void *unused) {
 	struct file *btt_f = filp_open(btt_path, O_RDWR | O_CREAT, 0);
 	int i, err;
 	loff_t pos = 0;
+	struct page *pg = alloc_pages(GFP_KERNEL, 1);
+	if (!pg) {
+		lwg("fail to get page!\n");
+	}
 	for (i = 0; i < BTT_SIZE; i++) {
 		void *entry = kmalloc(128, GFP_KERNEL);
 		btt_e cnt;
@@ -2297,7 +2310,10 @@ static int enigma_dbg_show(struct seq_file *s, void *unused) {
 			struct lookup_result result;
 			err = lookup_block(0, i, &result);
 		}
-#endif 
+#endif
+		btt_e disk_blk = get_disk_blk(0, i, pg, REQ_OP_READ);
+		lwg("%d\n", disk_blk);
+#if 0
 		cnt = enigma_dump_emu_disk(i);
 		snprintf(entry, 128, "%d,%d\n", i, cnt);
 		kernel_write(btt_f, entry, strlen(entry), &pos);
@@ -2305,6 +2321,8 @@ static int enigma_dbg_show(struct seq_file *s, void *unused) {
 			lwg("stopped at %d\n", i);
 			break;
 		}
+#endif
+		kfree(entry);
 	}
 	printk("btt dumped to %s\n", btt_path);
 	return 0;

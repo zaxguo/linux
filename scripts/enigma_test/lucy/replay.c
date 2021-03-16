@@ -120,8 +120,8 @@ static int setup_db(int fs) {
 	int ret, size, txt, cnt;
 	unsigned long total;
 	total = 0;
-	size = 4096;
-	data = malloc(5000);
+	size = 40960;
+	data = malloc(50000);
 	memset(data, 'a', size);
 	cnt = 0;
 	ret = snprintf(dest, 50, "/sybil/fs%d/cf.dat", fs);
@@ -135,10 +135,13 @@ static int setup_db(int fs) {
 		if (ret) {
 			total += ret;
 		}
-		if (((cnt++) % 256) == 0) {
+		if ((cnt % 256) == 0) {
 			printf("%d MB...\n", (int)(total >> 20));
+		}
+		if ((cnt % 2560) == 0) {
 			fsync(txt);
 		}
+		++cnt;
 	} while (ret == size);
 	printf("dumping %ld bytes to sbily fs %d\n", total, fs);
 	return 0;
