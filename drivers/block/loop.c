@@ -302,7 +302,7 @@ static btt_e get_disk_blk(int dev_id, btt_e sector, struct page *pg, int req_op)
 		e_block = FILEDATA;
 	}
 	struct arm_smccc_res res;
-#if 1
+#if 0
 	/* some debugging */
 	lwg("[%d:%d]:[%d ==> %d]\n",
 			dev_id,
@@ -316,6 +316,17 @@ static btt_e get_disk_blk(int dev_id, btt_e sector, struct page *pg, int req_op)
 	/* -----------lwg: the following is 'emulated' disk ops in tz ------------
 	 * -----------     it is considered to be part of our TCB  --------------*/
 	/*lwg("get res = %ld, %lx, %lx, %lx\n", res.a0, res.a1, res.a2, res.a3);*/
+
+#if 0
+	/* some debugging */
+	if (e_block != res.a0) {
+		lwg("[%d:%d]:[%d ==> %d]\n",
+				dev_id,
+				req_op,
+				(uint32_t)sector,
+				(uint32_t)e_block);
+	}
+#endif
 
 	/*decrypt_btt_entry(&e_block);*/
 	e_block = res.a0;
@@ -514,9 +525,9 @@ static int lo_read_simple(struct loop_device *lo, struct request *rq,
 			start_off = bvec.bv_offset;
 			should_skip = 0;
 			if (sector_iter == 2120 || sector_iter == 2176) {
-				should_skip = 1;
+				/*should_skip = 1;*/
 			}
-			lwg("%lld, %p, %d, %d, is_user = %d, in_irq = %d, in_atomic = %d\n", sector_iter, bvec.bv_page, orig_len, bvec.bv_offset, test_bit(PG_user, &bvec.bv_page->flags), in_interrupt(), in_atomic());
+			/*lwg("%lld, %p, %d, %d, is_user = %d, in_irq = %d, in_atomic = %d\n", sector_iter, bvec.bv_page, orig_len, bvec.bv_offset, test_bit(PG_user, &bvec.bv_page->flags), in_interrupt(), in_atomic());*/
 			for (k = 0; k < sector_cnt; k++, sector_iter++) {
 				iov_iter_bvec(&i[k], ITER_BVEC, &bvec, 1, 1 << 9);
 				if (should_skip) {
@@ -533,7 +544,7 @@ static int lo_read_simple(struct loop_device *lo, struct request *rq,
 #endif
 				pos_iter = disk_blk << 9;
 				bvec.bv_offset = start_off + (k << 9);
-				lwg("reading [%lld->%d], offset = %d\n", sector_iter, disk_blk, bvec.bv_offset);
+				/*lwg("reading [%lld->%d], offset = %d\n", sector_iter, disk_blk, bvec.bv_offset);*/
 				len += vfs_iter_read(lo->lo_backing_file, &i[k], &pos_iter, 0);
 				if (!is_filedata_blk(bvec.bv_page)) {
 					/* 12 us delay */

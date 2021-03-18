@@ -140,6 +140,7 @@ static int setup_db(int fs) {
 		}
 		if ((cnt % 2560) == 0) {
 			fsync(txt);
+			printf("sync on %d MB...\n", (int)(total >> 20));
 		}
 		++cnt;
 	} while (ret == size);
@@ -161,7 +162,7 @@ int main(int argc, char *argv[]) {
 		exit(0);
 	}
 	/*ret = construct_lib(trace_path);*/
-	ret = setup_db(0);
+	ret = setup_db(1);
 	return 0;
 	/* prepare the data buffer */
 	data = malloc(9000);

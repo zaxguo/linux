@@ -1141,7 +1141,7 @@ void end_page_writeback(struct page *page)
 			/*printk("lwg:%s:%d:clear wb for %p\n", __func__, __LINE__, page);*/
 		}
 	}
-#endif 
+#endif
 	smp_mb__after_atomic();
 	wake_up_page(page, PG_writeback);
 }
