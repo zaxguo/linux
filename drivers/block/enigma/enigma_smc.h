@@ -59,5 +59,7 @@ enum _req_opf {
 
 #define ENIGMA_SMC_CALL \
 	OPTEE_SMC_STD_CALL_VAL(0) // the "0" marks it is our SMC
+#define ENIGMA_FAST_CALL \
+	OPTEE_SMC_FAST_CALL_VAL(12)
 
 #endif

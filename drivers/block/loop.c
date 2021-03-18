@@ -311,7 +311,8 @@ static btt_e get_disk_blk(int dev_id, btt_e sector, struct page *pg, int req_op)
 			(uint32_t)e_block);
 #endif
 
-	arm_smccc_smc(ENIGMA_SMC_CALL, req_op, (uint32_t) e_block, dev_id,	0x0, 0x0, 0x0, 0x0, &res);
+	/*arm_smccc_smc(ENIGMA_SMC_CALL, req_op, (uint32_t) e_block, dev_id,	0x0, 0x0, 0x0, 0x0, &res);*/
+	arm_smccc_smc(ENIGMA_FAST_CALL, req_op, (uint32_t) e_block, dev_id,	0x0, 0x0, 0x0, 0x0, &res);
 
 	/* -----------lwg: the following is 'emulated' disk ops in tz ------------
 	 * -----------     it is considered to be part of our TCB  --------------*/

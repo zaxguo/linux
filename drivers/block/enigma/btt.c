@@ -88,7 +88,7 @@ int update_btt(int dev_id, btt_e vblk, btt_e e_blk) {
 	/*lwg("update [%d]: [%d] -> [%x]\n", dev_id, vblk, e_blk);*/
 	int ret;
 	btt_e *btt = get_btt_for_device(dev_id);
-	struct mutex *mtx = get_mtx_for_device(dev_id);
+	/*struct mutex *mtx = get_mtx_for_device(dev_id);*/
 	/*mutex_lock(mtx);*/
 	ret =	_update_btt(btt, vblk, e_blk);
 	/*mutex_unlock(mtx);*/
