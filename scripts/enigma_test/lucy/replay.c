@@ -137,11 +137,16 @@ static int setup_db(int fs) {
 		}
 		if ((cnt % 256) == 0) {
 			printf("%d MB...\n", (int)(total >> 20));
+			fsync(txt);
+			/* sleep does not work */
+			/*sleep(2);*/
 		}
+#if 0
 		if ((cnt % 2560) == 0) {
 			fsync(txt);
 			printf("sync on %d MB...\n", (int)(total >> 20));
 		}
+#endif
 		++cnt;
 	} while (ret == size);
 	printf("dumping %ld bytes to sbily fs %d\n", total, fs);
@@ -162,7 +167,7 @@ int main(int argc, char *argv[]) {
 		exit(0);
 	}
 	/*ret = construct_lib(trace_path);*/
-	ret = setup_db(1);
+	ret = setup_db(0);
 	return 0;
 	/* prepare the data buffer */
 	data = malloc(9000);

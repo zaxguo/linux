@@ -304,11 +304,14 @@ static btt_e get_disk_blk(int dev_id, btt_e sector, struct page *pg, int req_op)
 	struct arm_smccc_res res;
 #if 0
 	/* some debugging */
-	lwg("[%d:%d]:[%d ==> %d]\n",
+	lwg("[%d:%d]:[%d ==> %d], [%d, %d, %d]\n",
 			dev_id,
 			req_op,
 			(uint32_t)sector,
-			(uint32_t)e_block);
+			(uint32_t)e_block,
+			irqs_disabled(),
+			in_nmi(),
+			in_task());
 #endif
 
 	/*arm_smccc_smc(ENIGMA_SMC_CALL, req_op, (uint32_t) e_block, dev_id,	0x0, 0x0, 0x0, 0x0, &res);*/
@@ -388,7 +391,8 @@ static int lo_write_bvec(struct loop_device *lo, struct file *file, struct bio_v
 			bvec->bv_offset = start_off + (k << 9);
 			mutex_lock(&btt_lock);
 			btt_e disk_blk;
-#if 1
+			disk_blk = get_disk_blk(lo->lo_number, *sector_iter, bvec->bv_page, REQ_OP_WRITE);
+#if 0
 			if (lo->lo_number == actual_id) {
 				disk_blk = (btt_e)*sector_iter;
 			} else {
@@ -2311,9 +2315,20 @@ static int enigma_dbg_show(struct seq_file *s, void *unused) {
 	int i, err;
 	loff_t pos = 0;
 	struct page *pg = alloc_pages(GFP_KERNEL, 1);
+	void *mm = phys_to_virt(0x10100000);
 	if (!pg) {
 		lwg("fail to get page!\n");
 	}
+	if (mm) {
+		uint8_t *tmp = (uint8_t *)mm;
+		lwg("try reading the first few bytes..\n");
+		lwg("%p: %d, %d, %d\n", mm, *tmp, *(tmp+1), *(tmp+2));
+		lwg("try clearing tf mm..!\n");
+		memset(mm, 0, 0x6fffff);
+		lwg("reading again..!\n");
+		lwg("%p: %d, %d, %d\n", mm, *tmp, *(tmp+1), *(tmp+2));
+	}
+
 	for (i = 0; i < BTT_SIZE; i++) {
 		void *entry = kmalloc(128, GFP_KERNEL);
 		btt_e cnt;
