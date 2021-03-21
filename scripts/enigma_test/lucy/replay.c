@@ -6,6 +6,10 @@
 #include <time.h>
 #include <pthread.h>
 #include <string.h>
+#include <sys/types.h>
+#include <sys/types.h>
+#include <errno.h>
+
 
 #define DEFAULT_FS_CNT			4
 #define MAX_RECORDS				8000
@@ -114,17 +118,23 @@ static int construct_lib(char *lib_path) {
 	return 0;
 }
 
-static int setup_db(int fs) {
-	char dest[50];
+
+static int create_file_of_size(int fs, const char *path, unsigned long file_size) {
+	char dest[100];
 	char *data;
 	int ret, size, txt, cnt;
 	unsigned long total;
+	/* email db size */
+	unsigned long db_size = file_size;
 	total = 0;
 	size = 40960;
+	if (db_size < size) {
+		size = db_size;
+	}
 	data = malloc(50000);
 	memset(data, 'a', size);
 	cnt = 0;
-	ret = snprintf(dest, 50, "/sybil/fs%d/cf.dat", fs);
+	ret = snprintf(dest, 100, "/sybil/fs%d/%s", fs, path);
 	txt = open(dest, O_RDWR);
 	if (!txt) {
 		printf("fail to open %s!\n", dest);
@@ -136,23 +146,15 @@ static int setup_db(int fs) {
 			total += ret;
 		}
 		if ((cnt % 256) == 0) {
-			printf("%d MB...\n", (int)(total >> 20));
+			/*printf("%d MB...\n", (int)(total >> 20));*/
 			fsync(txt);
-			/* sleep does not work */
-			/*sleep(2);*/
 		}
-#if 0
-		if ((cnt % 2560) == 0) {
-			fsync(txt);
-			printf("sync on %d MB...\n", (int)(total >> 20));
-		}
-#endif
 		++cnt;
-	} while (ret == size);
-	printf("dumping %ld bytes to sbily fs %d\n", total, fs);
+	} while ((ret == size) && (total < db_size));
+	printf("creating %ld bytes to %s\n", total, dest);
+	free(data);
 	return 0;
 }
-
 
 int main(int argc, char *argv[]) {
 	int i, ret;
@@ -166,27 +168,37 @@ int main(int argc, char *argv[]) {
 		printf("plz supply correct arguments!\n");
 		exit(0);
 	}
-	/*ret = construct_lib(trace_path);*/
-	ret = setup_db(1);
-	return 0;
-	/* prepare the data buffer */
-	data = malloc(9000);
-	memset(data, 'a', 9000);
-	for (i = 0; i < fs_cnt; i++) {
-		struct args* arg = malloc(sizeof(struct args));
-		/* read buffer */
-		char *buf = malloc(9000);
-		arg->tid = i;
-		arg->data = data;
-		arg->buf = buf;
-		ret = pthread_create(&tid, NULL, replay, (void *)arg);
-		if (i == 0) {
-			actual = tid;
+	ret = open(trace_path, O_RDONLY);
+	if (ret < 0) {
+		printf("setting up sybil fs files..\n");
+		ret = create_file_of_size(1, "mail_index/snapshot1.json", 93);
+		ret = create_file_of_size(1, "mail_index/schema_1.json", 242);
+		ret = create_file_of_size(1, "mail_index/seg_1/cfmeta.json", 804);
+		ret = create_file_of_size(1, "mail_index/seg_1/segmeta.json", 400);
+		ret = create_file_of_size(1, "mail_index/seg_1/cf.dat", 2032423728);
+		return 0;
+	} else {
+		printf("Kicking off the exp...\n");
+		/*ret = construct_lib(trace_path);*/
+		/* prepare the data buffer */
+		data = malloc(9000);
+		memset(data, 'a', 9000);
+		for (i = 0; i < fs_cnt; i++) {
+			struct args* arg = malloc(sizeof(struct args));
+			/* read buffer */
+			char *buf = malloc(9000);
+			arg->tid = i;
+			arg->data = data;
+			arg->buf = buf;
+			ret = pthread_create(&tid, NULL, replay, (void *)arg);
+			if (i == 0) {
+				actual = tid;
+			}
 		}
+		/* wait for the actual to finish */
+		pthread_join(actual, NULL);
+		/*pthread_join(actual, NULL);*/
+		pthread_exit(0);
 	}
-	/* wait for the actual to finish */
-	pthread_join(actual, NULL);
-	/*pthread_join(actual, NULL);*/
-	pthread_exit(0);
 	return 0;
 }

@@ -1,0 +1,30 @@
+     0.000065 open("/home/tmp/lucy/apache-lucy-0.6.2/c/sample/mail_index/snapshot_1.json", O_RDONLY) = 3
+     0.000059 lseek(3, 0, SEEK_END)     = 93
+     0.000042 lseek(3, 0, SEEK_SET)     = 0
+     0.000049 mmap(NULL, 93, PROT_READ, MAP_SHARED, 3, 0) = 0x7fd93e7e4000
+     0.000080 munmap(0x7fd93e7e4000, 93) = 0
+     0.000049 close(3)                  = 0
+     0.000065 open("/home/tmp/lucy/apache-lucy-0.6.2/c/sample/mail_index/schema_1.json", O_RDONLY) = 3
+     0.000086 lseek(3, 0, SEEK_END)     = 242
+     0.000038 lseek(3, 0, SEEK_SET)     = 0
+     0.000038 mmap(NULL, 242, PROT_READ, MAP_SHARED, 3, 0) = 0x7fd93e7e4000
+     0.000072 munmap(0x7fd93e7e4000, 242) = 0
+     0.000042 close(3)                  = 0
+     0.000136 stat("/home/tmp/lucy/apache-lucy-0.6.2/c/sample/mail_index/seg_1", {st_mode=S_IFDIR|0775, st_size=4096, ...}) = 0
+     0.000062 stat("/home/tmp/lucy/apache-lucy-0.6.2/c/sample/mail_index/seg_1/cfmeta.json", {st_mode=S_IFREG|0664, st_size=804, ...}) = 0
+     0.000062 open("/home/tmp/lucy/apache-lucy-0.6.2/c/sample/mail_index/seg_1/cfmeta.json", O_RDONLY) = 3
+     0.000053 lseek(3, 0, SEEK_END)     = 804
+     0.000040 lseek(3, 0, SEEK_SET)     = 0
+     0.000041 mmap(NULL, 804, PROT_READ, MAP_SHARED, 3, 0) = 0x7fd93e7e4000
+     0.000097 munmap(0x7fd93e7e4000, 804) = 0
+     0.000046 close(3)                  = 0
+     0.000052 open("/home/tmp/lucy/apache-lucy-0.6.2/c/sample/mail_index/seg_1/cf.dat", O_RDONLY) = 3
+     0.000053 lseek(3, 0, SEEK_END)     = 2032423728
+     0.000040 lseek(3, 0, SEEK_SET)     = 0
+     0.000040 mmap(NULL, 2032423728, PROT_READ, MAP_SHARED, 3, 0) = 0x7fd8c421a000
+     0.000054 open("/home/tmp/lucy/apache-lucy-0.6.2/c/sample/mail_index/seg_1/segmeta.json", O_RDONLY) = 4
+     0.000051 lseek(4, 0, SEEK_END)     = 400
+     0.000041 lseek(4, 0, SEEK_SET)     = 0
+     0.000040 mmap(NULL, 400, PROT_READ, MAP_SHARED, 4, 0) = 0x7fd93e7e4000
+     0.000084 munmap(0x7fd93e7e4000, 400) = 0
+     0.000045 close(4)                  = 0

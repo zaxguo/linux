@@ -411,13 +411,6 @@ static int lo_write_bvec(struct loop_device *lo, struct file *file, struct bio_v
 			mutex_lock(&btt_lock);
 			btt_e disk_blk;
 			disk_blk = get_disk_blk(lo->lo_number, *sector_iter, bvec->bv_page, REQ_OP_WRITE);
-#if 0
-			if (lo->lo_number == actual_id) {
-				disk_blk = (btt_e)*sector_iter;
-			} else {
-				disk_blk = get_disk_blk(lo->lo_number, *sector_iter, bvec->bv_page, REQ_OP_WRITE);
-			}
-#endif
 			mutex_unlock(&btt_lock);
 			if (disk_blk == FILEDATA) {
 				/* omit data write */
@@ -540,32 +533,17 @@ static int lo_read_simple(struct loop_device *lo, struct request *rq,
 			}
 		} else {
 			/* our path */
-			int k, orig_len, start_off, should_skip;
+			int k, orig_len, start_off;
 			btt_e disk_blk;
 			sector_cnt = bvec.bv_len >> 9;
 			BUG_ON(sector_cnt > 8);
 			len = 0;
 			orig_len = bvec.bv_len;
 			start_off = bvec.bv_offset;
-			should_skip = 0;
-			if (sector_iter == 2120 || sector_iter == 2176) {
-				/*should_skip = 1;*/
-			}
 			/*lwg("%lld, %p, %d, %d, is_user = %d, in_irq = %d, in_atomic = %d\n", sector_iter, bvec.bv_page, orig_len, bvec.bv_offset, test_bit(PG_user, &bvec.bv_page->flags), in_interrupt(), in_atomic());*/
 			for (k = 0; k < sector_cnt; k++, sector_iter++) {
 				iov_iter_bvec(&i[k], ITER_BVEC, &bvec, 1, 1 << 9);
-				if (should_skip) {
-					disk_blk = (btt_e)sector_iter;
-				} else {
-					disk_blk = get_disk_blk(lo->lo_number, sector_iter, bvec.bv_page, REQ_OP_READ);
-				}
-#if 0
-				if (lo->lo_number != actual_id) {
-					disk_blk = get_disk_blk(lo->lo_number, sector_iter, bvec.bv_page, REQ_OP_READ);
-				} else {
-					disk_blk = (btt_e)sector_iter;
-				}
-#endif
+				disk_blk = get_disk_blk(lo->lo_number, sector_iter, bvec.bv_page, REQ_OP_READ);
 				pos_iter = disk_blk << 9;
 				bvec.bv_offset = start_off + (k << 9);
 				/*lwg("reading [%lld->%d], offset = %d\n", sector_iter, disk_blk, bvec.bv_offset);*/
