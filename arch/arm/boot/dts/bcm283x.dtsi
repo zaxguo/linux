@@ -7,6 +7,10 @@
  * spinning.
  */
 /memreserve/ 0x00000000 0x00001000;
+/* lwg: OPTEE */
+/*/memreserve/ 0x10100000 0x00f00000;*/
+/* lwg: ARM TF */
+/* /memreserve/ 0x11000000 0x0007ffff;*/
 
 /* This include file covers the common peripherals and configuration between
  * bcm2835 and bcm2836 implementations, leaving the CPU configuration to

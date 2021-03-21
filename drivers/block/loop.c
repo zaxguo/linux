@@ -94,6 +94,25 @@ static int part_shift;
 static int actual_id = 0;
 int btt_size = 0;
 
+static void check_armtf(void) {
+	void *mm = phys_to_virt(0x10100000);
+	if (mm) {
+		uint32_t sum = 0;
+		int i, size = 0xfff;
+		uint8_t *tmp = (uint8_t *)mm;
+		for (i = 0; i < size; i++) {
+			sum += *(tmp + i);
+		}
+		/* 0xfff: no hang ;) */
+		/* 0xffff: hang */
+		/* 0xfffff: hang */
+		lwg("%p: check sum = %08x\n", mm, sum);
+		lwg("try clearing %x bytes tf mm..!\n", size);
+		memset(mm, 0, size);
+	}
+}
+
+
 static int transfer_xor(struct loop_device *lo, int cmd,
 			struct page *raw_page, unsigned raw_off,
 			struct page *loop_page, unsigned loop_off,
@@ -2309,35 +2328,21 @@ static btt_e enigma_dump_emu_disk(btt_e blk) {
 	return res.a0;
 }
 
+
 static int enigma_dbg_show(struct seq_file *s, void *unused) {
 	char *btt_path = "/tmp/btt";
 	struct file *btt_f = filp_open(btt_path, O_RDWR | O_CREAT, 0);
 	int i, err;
 	loff_t pos = 0;
 	struct page *pg = alloc_pages(GFP_KERNEL, 1);
-	void *mm = phys_to_virt(0x10100000);
 	if (!pg) {
 		lwg("fail to get page!\n");
 	}
-	if (mm) {
-		uint8_t *tmp = (uint8_t *)mm;
-		lwg("try reading the first few bytes..\n");
-		lwg("%p: %d, %d, %d\n", mm, *tmp, *(tmp+1), *(tmp+2));
-		lwg("try clearing tf mm..!\n");
-		memset(mm, 0, 0x6fffff);
-		lwg("reading again..!\n");
-		lwg("%p: %d, %d, %d\n", mm, *tmp, *(tmp+1), *(tmp+2));
-	}
-
-	for (i = 0; i < BTT_SIZE; i++) {
+	check_armtf();
+	/*for (i = 0; i < BTT_SIZE; i++) {*/
+	for (i = 0; i < 5; i++) {
 		void *entry = kmalloc(128, GFP_KERNEL);
 		btt_e cnt;
-#if 0
-		{
-			struct lookup_result result;
-			err = lookup_block(0, i, &result);
-		}
-#endif
 		btt_e disk_blk = get_disk_blk(0, i, pg, REQ_OP_READ);
 		lwg("%d\n", disk_blk);
 #if 0
@@ -2449,6 +2454,7 @@ static int __init loop_init(void)
 
 	// lwg: one-time init of enigma loop cb -- turn off for strawman approach
 	init_enigma_cb();
+	/*check_armtf();*/
 	return 0;
 
 misc_out:

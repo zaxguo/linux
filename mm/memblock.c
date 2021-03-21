@@ -718,6 +718,9 @@ int __init_memblock memblock_reserve(phys_addr_t base, phys_addr_t size)
 	memblock_dbg("memblock_reserve: [%pa-%pa] %pF\n",
 		     &base, &end, (void *)_RET_IP_);
 
+	printk("memblock_reserve: [%pa-%pa] %pF\n",
+			 &base, &end, (void *)_RET_IP_);
+
 	return memblock_add_range(&memblock.reserved, base, size, MAX_NUMNODES, 0);
 }
 

@@ -359,6 +359,17 @@ static void __init fdt_enforce_memory_region(void)
 		memblock_cap_memory_range(reg.base, reg.size);
 }
 
+static void verify_armtf(void) {
+	uint32_t sum = 0;
+	int i, size;
+	uint8_t *tf = __va(0x10100000);
+    size	= 0x00f00000;
+	for (i = 0; i < size; i++) {
+		sum += *(tf + i);
+	}
+	printk("lwg:%s:%d: check sum = %08x\n", __func__, __LINE__, sum);
+}
+
 void __init arm64_memblock_init(void)
 {
 	const s64 linear_region_size = -(s64)PAGE_OFFSET;
@@ -471,6 +482,13 @@ void __init arm64_memblock_init(void)
 		arm64_dma_phys_limit = max_zone_dma_phys();
 	else
 		arm64_dma_phys_limit = PHYS_MASK + 1;
+
+	/* lwg: armtf, secure monitor + optee os...
+	 * "the area between 0x10000000 and 0x11000000 has to be manually protected"
+	 * https://github.com/ARM-software/arm-trusted-firmware/blob/master/docs/plat/rpi3.rst */
+	/* verify_armtf();*/
+	memblock_remove(0x10000000, 0x01000000);
+	/*verify_armtf();*/
 
 	reserve_crashkernel();
 

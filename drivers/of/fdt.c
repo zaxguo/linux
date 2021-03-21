@@ -702,6 +702,7 @@ void __init early_init_fdt_scan_reserved_mem(void)
 	/* Process header /memreserve/ fields */
 	for (n = 0; ; n++) {
 		fdt_get_mem_rsv(initial_boot_params, n, &base, &size);
+		printk("lwg:%s:%d:%lx - %lx\n", __func__, __LINE__, base, size);
 		if (!size)
 			break;
 		early_init_dt_reserve_memory_arch(base, size, 0);
