@@ -14,6 +14,18 @@
 #define DEFAULT_FS_CNT			4
 #define MAX_RECORDS				8000
 #define BILLION					1E9
+#define READ_BUF_SIZE			90000
+
+char *files[5] = {
+	"mail_index/snapshot1.json",
+	"mail_index/schema_1.json",
+	"mail_index/seg_1/cfmeta.json",
+	"mail_index/seg_1/segmeta.json",
+	"mail_index/seg_1/cf.dat"
+};
+
+__thread int fd_open_table[] = {0, 0, 0, 0, 0};
+
 
 struct args {
 	int tid;
@@ -23,7 +35,7 @@ struct args {
 
 /* r/w only */
 struct syscall {
-	int op;
+	int fd;
 	int size;
 	int offset;
 };
@@ -44,9 +56,24 @@ static struct syscall *get_trace_from_lib(int idx) {
 	return lib.head[idx];
 }
 
+static int file_opened(int fd) {
+	return fd_open_table[fd] == 0;
+}
+
+static void set_file_opened(int file, int fd) {
+	fd_open_table[file] = fd;
+	return;
+}
+
+static int get_open_fd(int fd) {
+	return fd_open_table[fd];
+}
+
+
+
 static void *replay(void *args) {
-	int ret, size, total, txt, idx;
-	char dest[50];
+	int ret, total, txt, idx;
+	char dest[100];
 	struct args *arg = (struct args*) args;
 	struct timespec start, end;
 	double delta;
@@ -55,24 +82,28 @@ static void *replay(void *args) {
 	}
 	total = 0;
 	idx = 0;
-	ret = snprintf(dest, 50, "/sybil/fs%d/test.txt", arg->tid);
-	txt = open(dest, O_RDWR);
 	do {
 		struct syscall *call = get_trace_from_lib(idx++);
-		switch (call->op) {
-			case 0:
-				ret = pread(txt, arg->buf, call->size, call->offset);
-				break;
-			case 1:
-				ret = pwrite(txt, arg->data, call->size, call->offset);
-				break;
+		if (file_opened(call->fd)) {
+			ret = snprintf(dest, 100, "/sybil/fs%d/%s", arg->tid, files[call->fd]);
+			txt = open(dest, O_RDWR);
+			if (txt > 0) {
+				/* set fd to the opened file */
+				set_file_opened(call->fd, txt);
+				/*printf("opening %s\n", dest);*/
+			} else {
+				printf("fail to open %s, ret = %d\n", dest, txt);
+				exit(EXIT_FAILURE);
+			}
+		} else {
+			txt = get_open_fd(call->fd);
+			/*printf("[%d]:open %s on %d\n", arg->tid, files[call->fd], txt);*/
 		}
+		ret = pread(txt, arg->buf, call->size, call->offset);
 		if (ret > 0) {
 			total += ret;
 		}
-		/*printf("[%d]:ret = %d, write_size = %d\n", arg->tid, ret, write_size);*/
 	} while(idx < lib.cnt);
-	fsync(txt);
 	if (arg->tid == 0) {
 		clock_gettime(CLOCK_MONOTONIC, &end);
 		delta = (end.tv_sec - start.tv_sec) + (end.tv_nsec - start.tv_nsec)/BILLION;
@@ -88,9 +119,9 @@ static int construct_lib(char *lib_path) {
 	ssize_t nread;
 	int lib_idx = 0;
 	trace_file = fopen(lib_path, "r");
-	/*lib = malloc(MAX_RECORDS * sizeof(struct syscall *));*/
 	if (trace_file == NULL) {
 		perror("fopen");
+		printf("cannot open trace file!\n");
 		exit(EXIT_FAILURE);
 	}
 	while (((nread = getline(&line, &len, trace_file)) != -1) && lib_idx < MAX_RECORDS) {
@@ -100,16 +131,27 @@ static int construct_lib(char *lib_path) {
 		while (idx < strlen(line)) {
 			if (line[idx++] == ',') {
 				if (cnt == 0) {
-					call->op = atoi(line);
+					int tmp;
+					for (tmp = 0; tmp < 5; tmp++) {
+						if (!strncmp(line, files[tmp], idx-1)) {
+							call->fd = tmp;
+							break;
+						}
+					}
 					j = idx;
 				} else if (cnt == 1) {
 					call->size = atoi(line + j);
 					call->offset = atoi(line + idx);
+					if (call->size > READ_BUF_SIZE) {
+						printf("%d: enlarge read buf size to at least %d\n", __LINE__, call->size);
+						exit(EXIT_FAILURE);
+					}
 				}
 				cnt++;
 			}
 		}
 		j = 0;
+		/*printf("call fd = %d, size = %d, offset = %d\n", call->fd, call->size, call->offset);*/
 		lib.head[lib_idx++] = call;
 	}
 	lib.cnt = lib_idx;
@@ -152,6 +194,7 @@ static int create_file_of_size(int fs, const char *path, unsigned long file_size
 		++cnt;
 	} while ((ret == size) && (total < db_size));
 	printf("creating %ld bytes to %s\n", total, dest);
+	close(txt);
 	free(data);
 	return 0;
 }
@@ -170,25 +213,23 @@ int main(int argc, char *argv[]) {
 	}
 	ret = open(trace_path, O_RDONLY);
 	if (ret < 0) {
-		printf("setting up sybil fs files..\n");
-		ret = create_file_of_size(1, "mail_index/snapshot1.json", 93);
-		ret = create_file_of_size(1, "mail_index/schema_1.json", 242);
-		ret = create_file_of_size(1, "mail_index/seg_1/cfmeta.json", 804);
-		ret = create_file_of_size(1, "mail_index/seg_1/segmeta.json", 400);
-		ret = create_file_of_size(1, "mail_index/seg_1/cf.dat", 2032423728);
+		printf("setting up db files for %d..\n", fs_cnt);
+		ret = create_file_of_size(fs_cnt, "mail_index/snapshot1.json", 93);
+		ret = create_file_of_size(fs_cnt, "mail_index/schema_1.json", 242);
+		ret = create_file_of_size(fs_cnt, "mail_index/seg_1/cfmeta.json", 804);
+		ret = create_file_of_size(fs_cnt, "mail_index/seg_1/segmeta.json", 400);
+		ret = create_file_of_size(fs_cnt, "mail_index/seg_1/cf.dat", 2032423728);
 		return 0;
 	} else {
 		printf("Kicking off the exp...\n");
-		/*ret = construct_lib(trace_path);*/
+		ret = construct_lib(trace_path);
 		/* prepare the data buffer */
-		data = malloc(9000);
-		memset(data, 'a', 9000);
 		for (i = 0; i < fs_cnt; i++) {
 			struct args* arg = malloc(sizeof(struct args));
 			/* read buffer */
-			char *buf = malloc(9000);
+			char *buf = malloc(READ_BUF_SIZE);
 			arg->tid = i;
-			arg->data = data;
+			arg->data = NULL;
 			arg->buf = buf;
 			ret = pthread_create(&tid, NULL, replay, (void *)arg);
 			if (i == 0) {

@@ -422,7 +422,7 @@ static int lo_write_bvec(struct loop_device *lo, struct file *file, struct bio_v
 			/* sanity check */
 			BUG_ON(disk_blk == NULL_BLK);
 			/* Out of range of emu disk! */
-			if ((lo->lo_number != actual_id) && (disk_blk > 200000)) {
+			if ((lo->lo_number != actual_id) && (disk_blk > 800000)) {
 				lwg("get %d...exceeding max btt size in tz!!\n", disk_blk);
 				BUG_ON(1);
 			}
@@ -2316,14 +2316,16 @@ static int enigma_dbg_show(struct seq_file *s, void *unused) {
 	if (!pg) {
 		lwg("fail to get page!\n");
 	}
-	check_armtf();
-	/*for (i = 0; i < BTT_SIZE; i++) {*/
-	for (i = 0; i < 5; i++) {
+	/*check_armtf();*/
+	for (i = 0; i < BTT_SIZE; i++) {
 		void *entry = kmalloc(128, GFP_KERNEL);
 		btt_e cnt;
+#if 0
 		btt_e disk_blk = get_disk_blk(0, i, pg, REQ_OP_READ);
 		lwg("%d\n", disk_blk);
-#if 0
+#endif
+
+#if 1
 		cnt = enigma_dump_emu_disk(i);
 		snprintf(entry, 128, "%d,%d\n", i, cnt);
 		kernel_write(btt_f, entry, strlen(entry), &pos);

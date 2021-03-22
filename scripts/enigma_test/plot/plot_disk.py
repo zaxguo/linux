@@ -4,7 +4,7 @@ import matplotlib.pyplot as plt
 import seaborn as sns
 
 
-f = open('./2G.dump', 'r')
+f = open('./2g_10_ro.dump', 'r')
 y = []
 prev = -1
 for line in f:

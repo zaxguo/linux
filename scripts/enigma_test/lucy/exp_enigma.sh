@@ -32,18 +32,17 @@ touch /sybil/fs1/mail_index/seg_1/cfmeta.json
 touch /sybil/fs1/mail_index/seg_1/segmeta.json
 touch /sybil/fs1/mail_index/seg_1/cf.dat
 
-./a.out ${END} dummy
+./a.out 1 dummy
 
 sync
-exit 1
 
 
 echo "mounting sybil...."
 END=$1
 
 for ((i=2;i<END;i++)); do
-	losetup -l /dev/loop${i} loop_sybil.img
-	mount /dev/loop${i} /sybil/fs${i} -o nodelalloc
+	losetup -l /dev/loop${i} loop_sybil_2g.img
+	mount /dev/loop${i} /sybil/fs${i} -o nodelalloc 
 	sync
 done
 
