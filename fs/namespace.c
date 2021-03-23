@@ -30,6 +30,9 @@
 #include "pnode.h"
 #include "internal.h"
 
+/* lwg */
+#include <linux/jiffies.h>
+
 /* Maximum number of mounts in a mount namespace */
 unsigned int sysctl_mount_max __read_mostly = 100000;
 
@@ -2767,6 +2770,9 @@ long do_mount(const char *dev_name, const char __user *dir_name,
 	struct path path;
 	unsigned int mnt_flags = 0, sb_flags;
 	int retval = 0;
+	u64 start, end;
+
+	start = jiffies;
 
 	/* Discard magic */
 	if ((flags & MS_MGC_MSK) == MS_MGC_VAL)
@@ -2844,6 +2850,9 @@ long do_mount(const char *dev_name, const char __user *dir_name,
 				      dev_name, data_page);
 dput_out:
 	path_put(&path);
+
+	end = jiffies - start;
+	printk("mounting %s on %s costs %d ms", dev_name, dir_name, jiffies_to_msecs(end));
 	return retval;
 }
 

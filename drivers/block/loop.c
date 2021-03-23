@@ -550,7 +550,7 @@ static int lo_read_simple(struct loop_device *lo, struct request *rq,
 				len += vfs_iter_read(lo->lo_backing_file, &i[k], &pos_iter, 0);
 				if (!is_filedata_blk(bvec.bv_page)) {
 					/* 12 us delay */
-					ndelay(12000);
+					/*ndelay(12000);*/
 					/*lwg("delay end..\n");*/
 				}
 				if (len < 0) {
@@ -1240,11 +1240,15 @@ static int loop_set_fd(struct loop_device *lo, fmode_t mode,
 
 	/* add BTT when loop device is added */
 	if (has_enigma_cb()) {
+		u64 start, delta;
 		struct gendisk *disk = lo->lo_disk;
 		init_btt_for_device(lo->lo_number);
 		/* dirty, we let loop0 be actual, other will get btt from loop1 */
 		if (lo->lo_number > 1) {
+			start = jiffies;
 			copy_btt(1, lo->lo_number);
+			delta = jiffies - start;
+			printk("forking costs %d msec..\n", jiffies_to_msecs(delta));
 		}
 		disk->flags |= GENHD_HAS_BTT;
 	}
@@ -2316,6 +2320,10 @@ static int enigma_dbg_show(struct seq_file *s, void *unused) {
 	if (!pg) {
 		lwg("fail to get page!\n");
 	}
+
+	encrypt_btt(0);
+	return 0;
+
 	/*check_armtf();*/
 	for (i = 0; i < BTT_SIZE; i++) {
 		void *entry = kmalloc(128, GFP_KERNEL);

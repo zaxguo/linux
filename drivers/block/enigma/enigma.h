@@ -44,6 +44,7 @@ extern int btt_size;
 
 int init_btt_for_device(int lo_number);
 int copy_btt(int from, int to);
+int encrypt_btt(int dev_id);
 btt_e *alloc_btt(unsigned long size);
 int free_btt(btt_e *btt);
 int update_btt(int dev_id, btt_e vblk, btt_e eblk);

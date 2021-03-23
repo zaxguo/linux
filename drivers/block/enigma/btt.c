@@ -13,17 +13,18 @@
 #include <linux/rwlock.h>
 
 
-#define NEEDS_ENDEC		0
+#define NEEDS_ENDEC		1
 
 struct enigma_cb enigma_cb;
 enigma_lock btt_lock;
 
-// in-place dencryption
+// in-place en/decryption
 // TODO: move this to TZ
 // note: the in address cannot be a stack addr
 static int endec_btt_entry(u8 *in, int endec) {
 	int err;
-	u8 iv[16];
+	/* ECB DES 64 -- blk size = 8 must be aligned */
+	u8 iv[8];
 	struct scatterlist sg;
 	struct skcipher_request *req = NULL;
 	struct crypto_skcipher *tfm = enigma_cb.cipher;
@@ -33,9 +34,10 @@ static int endec_btt_entry(u8 *in, int endec) {
 		return 0;
 	}
 	/* make iv (i.e. nonce) uniformly 0  */
-	sg_init_one(&sg, in, BTT_ENTRY_SIZE);
+	/*sg_init_one(&sg, in, BTT_ENTRY_SIZE);*/
+	sg_init_one(&sg, in, 8);
 	skcipher_request_set_callback(req, 0, NULL, NULL);
-	skcipher_request_set_crypt(req, &sg, &sg, BTT_ENTRY_SIZE, iv);
+	skcipher_request_set_crypt(req, &sg, &sg, 8, iv);
 
 	if (endec == BTT_ENC) {
 		err = crypto_skcipher_encrypt(req);
@@ -139,7 +141,7 @@ int init_btt_for_device(int lo_number) {
 			} else {
 				_btt[i] = NULL_BLK;
 			}
-			encrypt_btt_entry(_btt + i);
+			/*encrypt_btt_entry(_btt + i);*/
 		}
 		cb->btt[lo_number] = _btt;
 		lwg("btt initialization for [%d] complete..\n", lo_number);
@@ -160,18 +162,20 @@ static int init_enigma_crypto(struct crypto_skcipher **cipher) {
 	int err;
 	struct crypto_skcipher *tfm = NULL;
 	// lwg: symmetric key
-	u8 key[64];
+	u8 key[8];
 	/* lwg: des has cipher block size of 8B */
 	tfm = crypto_alloc_skcipher("ecb(des)", 0, 0);
 	if (IS_ERR(tfm)) {
 		pr_err("Error allocating crypto handle: %ld\n", PTR_ERR(tfm));
 		return PTR_ERR(tfm);
 	}
+	lwg("gonna call %pf\n", tfm->setkey);
 	err = crypto_skcipher_setkey(tfm, key, sizeof(key));
 	if (err) {
 		pr_err("Error setting key: %d\n", err);
 	}
 	*cipher = tfm;
+	lwg("enigma crypto sucessfully set key...\n");
 	return 0;
 }
 
@@ -228,6 +232,23 @@ int copy_btt(int from, int to) {
 	}
 	lwg("copied btt from [%d] to [%d]\n", from, to);
 	return 0;
+}
+
+int encrypt_btt(int dev_id) {
+	int i;
+	btt_e before,after;
+	btt_e *entry = get_btt_for_device(dev_id);
+	u64 start, delta;
+	start = jiffies;
+	for (i = 0; i < BTT_SIZE; i++, entry++) {
+		before = *entry;
+		endec_btt_entry((u8 *)entry, BTT_ENC);
+		after = *entry;
+		/*lwg("before: %ld --  after: %16lx\n", before, after);*/
+	}
+	delta = jiffies - start;
+	lwg("takes %d ms to encrypt btt\n", jiffies_to_msecs(delta));
+	return i;
 }
 
 

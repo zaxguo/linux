@@ -1,10 +1,17 @@
+#!/bin/python3
 import numpy as np
 import numpy.random
 import matplotlib.pyplot as plt
 import seaborn as sns
+import sys
 
+if len(sys.argv) != 2:
+    print("try again")
+    sys.exit(0)
 
-f = open('./2g_10_ro.dump', 'r')
+dump_file = sys.argv[1]
+
+f = open(dump_file, 'r')
 y = []
 prev = -1
 for line in f:

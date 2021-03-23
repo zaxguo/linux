@@ -402,6 +402,7 @@ static int setkey(struct crypto_tfm *tfm, const u8 *key, unsigned int keylen)
 
 	if (keylen < cipher->min_keysize || keylen > cipher->max_keysize) {
 		tfm->crt_flags |= CRYPTO_TFM_RES_BAD_KEY_LEN;
+		printk("lwg:%s:%d:hit...min key size = %d, max = %d\n", __func__, __LINE__, cipher->min_keysize, cipher->max_keysize);
 		return -EINVAL;
 	}
 

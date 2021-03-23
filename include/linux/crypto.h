@@ -1224,6 +1224,7 @@ static inline void crypto_blkcipher_clear_flags(struct crypto_blkcipher *tfm,
 static inline int crypto_blkcipher_setkey(struct crypto_blkcipher *tfm,
 					  const u8 *key, unsigned int keylen)
 {
+	printk("lwg:%s:%d:gonna call %pf\n", __func__, __LINE__, crypto_blkcipher_crt(tfm)->setkey);
 	return crypto_blkcipher_crt(tfm)->setkey(crypto_blkcipher_tfm(tfm),
 						 key, keylen);
 }
