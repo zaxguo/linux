@@ -3,6 +3,9 @@
 #define BLOCK_SIZE	(1 << 9)
 #define READ	0
 #define WRITE	1
+#define DUMMY_BLK	(-1)
+
+#define min(a,b) (a >= b) ? (b) : (a)
 
 
 struct bucket {

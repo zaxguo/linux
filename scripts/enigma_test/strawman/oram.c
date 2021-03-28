@@ -60,9 +60,8 @@ static void insert_path(int *path, int idx) {
 	memcpy(tmp, path, sizeof(int) * (param->height + 1));
 	path_map[idx] = tmp;
 	/* debugging -- print height + 1 nodes as path */
-	printf("inserting at %d --- %p\n", idx, path_map + idx);
+	/*printf("inserting at %d --- %p\n", idx, path_map + idx);*/
 	print_path(path_map[idx], param->height + 1);
-	dump_bucket(0);
 }
 
 /* pre-compute the paths from root to leaves */
@@ -85,7 +84,7 @@ static int init_position_map(int blocks) {
 	buckets = malloc(sizeof(struct bucket *) * (total_buckets));
 	for (i = 0; i < total_buckets; i++) {
 		struct bucket *bkt = malloc(sizeof(struct bucket));
-		memset(bkt->b_list, -1, sizeof(uint32_t) * BUCKET_SIZE);
+		memset(bkt->b_list, DUMMY_BLK, sizeof(uint32_t) * BUCKET_SIZE);
 		buckets[i] = bkt;
 	}
 	/* position map
@@ -96,7 +95,9 @@ static int init_position_map(int blocks) {
 	printf("%s:%d:tree_height = %d, total_buckets = %ld\n", __func__, __LINE__, tree_height, total_buckets);
 	for (i = 0; i < blocks; i++) {
 		/* must be a leaf node hence the offset after random draw  */
-		pos_map[i] = get_random_leaf(param);
+		int bucket = get_random_leaf(param);
+		pos_map[i] = bucket;
+		buckets[bucket]->b_list[0] = i;
 		printf("%s:%d: [%d] -> [%d]\n", __func__, __LINE__, i, pos_map[i]);
 	}
 	int *path = malloc(sizeof(int) * (tree_height + 1));
@@ -125,10 +126,10 @@ static int _create_oram_tree(char *img, loff_t file_size, int block_size, int bu
 	param->block_size = block_size;
 	param->height = height;
 	param->leaf_offset = (int)pow(2., height) - 1;
+	/* stash szie taken from Fig 3 of the paper */
 	stash = malloc(sizeof(struct stash));
-	/* take a number from Fig 3 of the paper */
-	stash->size = 20;
-	stash->b_list = malloc(sizeof(int) * (stash->size));
+	stash->size = 0;
+	stash->b_list = malloc(sizeof(int) * (20));
 	path_map = malloc(sizeof(int *) * param->leaf_offset);
 	/* init position map for client */
 	init_position_map(blks);
@@ -139,14 +140,16 @@ static void oram_access(int op, int blk_id, void *buf) {
 	int x = pos_map[blk_id];
 	/* remap */
 	pos_map[blk_id] = get_random_leaf(param);
-	printf("picking %d leaf...\n", x);
 	path = path_map[x - param->leaf_offset];
+	printf("picking %d bucket (leaf node)..., path:", x);
 	print_path(path, param->height + 1);
 	for (int i = 0; i < param->height + 1; i++) {
 		int bid = path[i];
 		/* read into stash */
 		printf("read %d bucket into stash\n", bid);
-		dump_bucket(bid);
+		/*dump_bucket(bid);*/
+		stash->b_list[i] = bid;
+		++stash->size;
 	}
 
 	if (op == WRITE) {
@@ -154,13 +157,52 @@ static void oram_access(int op, int blk_id, void *buf) {
 	}
 
 	for (int i = param->height; i >= 0; i--) {
-		int *_s = malloc(sizeof(int) * 10);
-		/* generate new path */
+		/* S' */
+		int *_s = malloc(sizeof(int) * 20);
+		int s_size = 0;
+		/* generate S' */
+		for (int j = 0; j < stash->size; j++) {
+				int bid = stash->b_list[j];
+				struct bucket *bkt = buckets[bid];
+				for (int k = 0; k < BUCKET_SIZE; k++) {
+					int block = bkt->b_list[k];
+					if (block == DUMMY_BLK) {
+						/*printf("dummy block -- no position map entry\n");*/
+						continue;
+					} else {
+						int _x = pos_map[block];
+						int *_x_path = path_map[_x - param->leaf_offset];
+						printf("orig_path[%d]=%d, new_path[%d]=%d\n", i, path[i], i, _x_path[i]);
+						/* intersect */
+						if (_x_path[i] == path[i]) {
+							_s[s_size++] = block;
+							printf("block %d put into new stash\n", block);
+						}
+					}
+				}
+		}
+		printf("tmp stash size = %d, local stash size = %d\n", s_size, stash->size);
+		/* S = S - S' */
+		int *s = stash->b_list;
+		int found = 0;
+		for (int j = 0; j < min(s_size, BUCKET_SIZE); j++) {
+			int blk = _s[j];
+			for (int k = 0; k < stash->size; k++) {
+				if (blk == s[k]) {
+					s[k] = DUMMY_BLK;
+					found++;
+					break;
+				}
+			}
+		}
+		stash->size -= found;
+		/* write bucket */
+		printf("to write ");
+		for (int i = 0; i < min(s_size, BUCKET_SIZE); i++) {
+			printf("%d ", _s[i]);
+		}
+		printf("to bucket %d\n", path[i]);
 	}
-
-
-
-
 }
 
 int create_oram_tree(char *orig_file) {
