@@ -64,6 +64,7 @@ static void insert_path(int *path, int idx) {
 	print_path(path_map[idx], param->height + 1);
 }
 
+
 /* pre-compute the paths from root to leaves */
 static void leaf_path(int curr_node, int curr_height, int tree_height, int *path) {
 	path[curr_height] = curr_node;
@@ -96,8 +97,20 @@ static int init_position_map(int blocks) {
 	for (i = 0; i < blocks; i++) {
 		/* must be a leaf node hence the offset after random draw  */
 		int bucket = get_random_leaf(param);
+		int found;
 		pos_map[i] = bucket;
-		buckets[bucket]->b_list[0] = i;
+		struct bucket *bkt = buckets[bucket];
+		found = 0;
+		for (int j = 0; j < BUCKET_SIZE; j++) {
+			if (bkt->b_list[j] == DUMMY_BLK) {
+				bkt->b_list[j] = i;
+				found = 1;
+				break;
+			}
+		}
+		if (!found) {
+			printf("-------------failing to fill buckets during init!!\n");
+		}
 		printf("%s:%d: [%d] -> [%d]\n", __func__, __LINE__, i, pos_map[i]);
 	}
 	int *path = malloc(sizeof(int) * (tree_height + 1));
@@ -128,11 +141,66 @@ static int _create_oram_tree(char *img, loff_t file_size, int block_size, int bu
 	param->leaf_offset = (int)pow(2., height) - 1;
 	/* stash szie taken from Fig 3 of the paper */
 	stash = malloc(sizeof(struct stash));
-	stash->size = 0;
+	stash->size = 20;
+	stash->cnt = 0;
+	stash->cnt = 0;
 	stash->b_list = malloc(sizeof(int) * (20));
+	memset(stash->b_list, DUMMY_BLK, sizeof(int) * 20);
 	path_map = malloc(sizeof(int *) * param->leaf_offset);
 	/* init position map for client */
 	init_position_map(blks);
+}
+
+static int insert_stash(struct stash *s, int blk) {
+	for (int i = 0; i < s->size; i++) {
+		if (s->b_list[i] == DUMMY_BLK) {
+			s->b_list[i] = blk;
+			s->cnt++;
+			return i;
+		}
+	}
+	return -1;
+}
+
+static int remove_stash(struct stash *s, int idx) {
+	int blk = s->b_list[idx];
+	s->b_list[idx] = DUMMY_BLK;
+	s->cnt--;
+	return blk;
+}
+
+static void read_bucket(int bid, struct stash *s) {
+	struct bucket *bkt = buckets[bid];
+	printf("read %d bucket into stash:", bid);
+	for (int i = 0; i < BUCKET_SIZE; i++) {
+		int blk = bkt->b_list[i];
+		if (blk == DUMMY_BLK) {
+			/* read but discard */
+			continue;
+		}
+		printf("%d ", blk);
+		if (insert_stash(stash, blk) == -1) {
+			printf("fail to insert stash!!! stash full!\n");
+		}
+	}
+	printf("\n");
+}
+
+/* write the tmp stash into bucket */
+static void write_bucket(int bid, int *_s, int size) {
+	struct bucket *bkt = buckets[bid];
+	int i;
+	printf("write ");
+	for (i = 0; i < size; i++) {
+		printf("%d ", _s[i]);
+		bkt->b_list[i] = _s[i];
+	}
+	while(i < BUCKET_SIZE) {
+		/* fill dummies */
+		bkt->b_list[i++] = DUMMY_BLK;
+	}
+	printf("to bucket %d, dummies = %d\n", bid, BUCKET_SIZE - size);
+
 }
 
 static void oram_access(int op, int blk_id, void *buf) {
@@ -141,15 +209,12 @@ static void oram_access(int op, int blk_id, void *buf) {
 	/* remap */
 	pos_map[blk_id] = get_random_leaf(param);
 	path = path_map[x - param->leaf_offset];
-	printf("picking %d bucket (leaf node)..., path:", x);
+	printf("orig %d bucket, new %d bucket.. path:", x, pos_map[blk_id]);
 	print_path(path, param->height + 1);
 	for (int i = 0; i < param->height + 1; i++) {
 		int bid = path[i];
 		/* read into stash */
-		printf("read %d bucket into stash\n", bid);
-		/*dump_bucket(bid);*/
-		stash->b_list[i] = bid;
-		++stash->size;
+		read_bucket(bid, stash);
 	}
 
 	if (op == WRITE) {
@@ -162,46 +227,40 @@ static void oram_access(int op, int blk_id, void *buf) {
 		int s_size = 0;
 		/* generate S' */
 		for (int j = 0; j < stash->size; j++) {
-				int bid = stash->b_list[j];
-				struct bucket *bkt = buckets[bid];
-				for (int k = 0; k < BUCKET_SIZE; k++) {
-					int block = bkt->b_list[k];
-					if (block == DUMMY_BLK) {
-						/*printf("dummy block -- no position map entry\n");*/
-						continue;
-					} else {
-						int _x = pos_map[block];
-						int *_x_path = path_map[_x - param->leaf_offset];
-						printf("orig_path[%d]=%d, new_path[%d]=%d\n", i, path[i], i, _x_path[i]);
-						/* intersect */
-						if (_x_path[i] == path[i]) {
-							_s[s_size++] = block;
-							printf("block %d put into new stash\n", block);
-						}
-					}
-				}
-		}
-		printf("tmp stash size = %d, local stash size = %d\n", s_size, stash->size);
-		/* S = S - S' */
-		int *s = stash->b_list;
-		int found = 0;
-		for (int j = 0; j < min(s_size, BUCKET_SIZE); j++) {
-			int blk = _s[j];
-			for (int k = 0; k < stash->size; k++) {
-				if (blk == s[k]) {
-					s[k] = DUMMY_BLK;
-					found++;
-					break;
-				}
+			int block = stash->b_list[j];
+			if (block == DUMMY_BLK) {
+				continue;
+			}
+			int _x = pos_map[block];
+			int *_x_path = path_map[_x - param->leaf_offset];
+			printf("orig_path[%d]=%d, new_path[%d]=%d\n", i, path[i], i, _x_path[i]);
+			/* intersect */
+			if (_x_path[i] == path[i]) {
+				_s[s_size++] = block;
+				printf("intersect, block %d put into tmp stash\n", block);
 			}
 		}
-		stash->size -= found;
-		/* write bucket */
-		printf("to write ");
-		for (int i = 0; i < min(s_size, BUCKET_SIZE); i++) {
-			printf("%d ", _s[i]);
+		printf("tmp stash size = %d, local stash size = %d\n", s_size, stash->cnt);
+		/* S = S - S' */
+		int *s = stash->b_list;
+		s_size = MIN(s_size, BUCKET_SIZE);
+		if (s_size > 0) {
+			printf("remove ");
+			for (int j = 0; j < s_size; j++) {
+				int blk = _s[j];
+				for (int k = 0; k < stash->size; k++) {
+					if (blk == s[k]) {
+						remove_stash(stash, k);
+						printf("%d ", blk);
+						break;
+					}
+				}
+			}
+			printf("from stash...\n");
 		}
-		printf("to bucket %d\n", path[i]);
+		/* write bucket */
+		write_bucket(path[i], _s, s_size);
+		free(_s);
 	}
 }
 
@@ -220,6 +279,7 @@ int create_oram_tree(char *orig_file) {
 
 int main() {
 	create_oram_tree('test.txt');
+	oram_access(0, 0, NULL);
 	oram_access(0, 0, NULL);
 	return 0;
 }

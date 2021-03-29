@@ -4,8 +4,7 @@
 #define READ	0
 #define WRITE	1
 #define DUMMY_BLK	(-1)
-
-#define min(a,b) (a >= b) ? (b) : (a)
+#define MIN(a,b) (((a)<(b))?(a):(b))
 
 
 struct bucket {
@@ -24,6 +23,7 @@ struct oram_tree_param {
 struct stash {
 	int *b_list;
 	int size;
+	int cnt;
 };
 
 int create_oram_tree(char *orig_file);
