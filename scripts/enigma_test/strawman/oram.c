@@ -12,6 +12,7 @@
 #include <time.h>
 
 #define BILLION		1E9
+#define NEED_ENC	1
 
 /* global vars */
 int *pos_map;
@@ -179,6 +180,7 @@ static void _rw_bucket(int bid, int op) {
 	memset(buf, 0, size);
 	if (op == READ) {
 		ret = pread(param->img, buf, size, off);
+#if NEED_ENC
 		int total = 0;
 		do {
 			/* 16B block cipher */
@@ -188,7 +190,9 @@ static void _rw_bucket(int bid, int op) {
 			lwg("[%hhx %hhx %hhx]\n", *(pt), *(pt+1), *(pt+2));
 			total += 16;
 		} while (total < size);
+#endif
 	} else if (op == WRITE) {
+#if NEED_ENC
 		int total = 0;
 		do {
 			/* 16B block cipher */
@@ -198,6 +202,7 @@ static void _rw_bucket(int bid, int op) {
 			lwg("[%hhx %hhx %hhx]\n", *(pt), *(pt+1), *(pt+2));
 			total += 16;
 		} while (total < size);
+#endif
 		ret = pwrite(param->img, buf, size, off);
 	}
 	if (ret != size) {
@@ -392,7 +397,7 @@ static void measure_oram(int blks) {
 
 int main() {
 	int blks = create_oram_tree('test.txt');
-	/* oram access */
+	printf("file size = %d...\n", blks * param->block_size);
 	struct timespec start, end;
 	double delta;
 	clock_gettime(CLOCK_MONOTONIC, &start);
