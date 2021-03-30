@@ -7,6 +7,10 @@
 #define MIN(a,b) (((a)<(b))?(a):(b))
 
 
+//#define lwg(fmt, ...) printf("%s:%d: "fmt, __func__, __LINE__, ##__VA_ARGS__);
+//#define lwg(fmt, ...) printf(fmt, ##__VA_ARGS__);
+#define lwg(fmt, ...) 0
+
 struct bucket {
 	uint32_t b_list[BUCKET_SIZE];
 };
@@ -18,6 +22,7 @@ struct oram_tree_param {
 	int leaf_offset;
 	int *pos_map;
 	int *stash;
+	int img;
 };
 
 struct stash {
