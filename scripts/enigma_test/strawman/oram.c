@@ -305,7 +305,7 @@ static int _create_oram_tree(char *img, loff_t file_size, int block_size, int bu
 }
 
 
-static void oram_access(int op, int blk_id, void *buf) {
+void oram_access(int op, int blk_id, void *buf) {
 	int *path;
 	int x = pos_map[blk_id];
 	/* remap */
@@ -395,6 +395,8 @@ static void measure_oram(int blks) {
 	}
 }
 
+#if 0
+/* single-file test only */
 int main() {
 	int blks = create_oram_tree('test.txt');
 	printf("file size = %d...\n", blks * param->block_size);
@@ -415,3 +417,4 @@ int main() {
 
 	return 0;
 }
+#endif

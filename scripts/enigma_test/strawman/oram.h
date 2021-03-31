@@ -11,6 +11,8 @@
 //#define lwg(fmt, ...) printf(fmt, ##__VA_ARGS__);
 #define lwg(fmt, ...) 0
 
+extern struct oram_tree_param *param;
+
 struct bucket {
 	uint32_t b_list[BUCKET_SIZE];
 };
@@ -32,3 +34,4 @@ struct stash {
 };
 
 int create_oram_tree(char *orig_file);
+void oram_access(int op, int bid, void *data);
