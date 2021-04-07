@@ -541,13 +541,17 @@ static int lo_read_simple(struct loop_device *lo, struct request *rq,
 			orig_len = bvec.bv_len;
 			start_off = bvec.bv_offset;
 			/*lwg("%lld, %p, %d, %d, is_user = %d, in_irq = %d, in_atomic = %d\n", sector_iter, bvec.bv_page, orig_len, bvec.bv_offset, test_bit(PG_user, &bvec.bv_page->flags), in_interrupt(), in_atomic());*/
+			u64 start, delta;
 			for (k = 0; k < sector_cnt; k++, sector_iter++) {
 				iov_iter_bvec(&i[k], ITER_BVEC, &bvec, 1, 1 << 9);
 				disk_blk = get_disk_blk(lo->lo_number, sector_iter, bvec.bv_page, REQ_OP_READ);
 				pos_iter = disk_blk << 9;
 				bvec.bv_offset = start_off + (k << 9);
 				/*lwg("reading [%lld->%d], offset = %d\n", sector_iter, disk_blk, bvec.bv_offset);*/
+				start = ktime_get_mono_fast_ns();
 				len += vfs_iter_read(lo->lo_backing_file, &i[k], &pos_iter, 0);
+				delta = ktime_get_mono_fast_ns()- start;
+				lwg("%d,%ld,%d,%ld\n", lo->lo_number, sector_iter, disk_blk, delta);
 				if (!is_filedata_blk(bvec.bv_page)) {
 					/* 12 us delay */
 					/*ndelay(12000);*/
@@ -2321,8 +2325,8 @@ static int enigma_dbg_show(struct seq_file *s, void *unused) {
 		lwg("fail to get page!\n");
 	}
 
-	encrypt_btt(0);
-	return 0;
+	/*encrypt_btt(0);*/
+	/*return 0;*/
 
 	/*check_armtf();*/
 	for (i = 0; i < BTT_SIZE; i++) {

@@ -2772,6 +2772,8 @@ long do_mount(const char *dev_name, const char __user *dir_name,
 	int retval = 0;
 	u64 start, end;
 
+
+	printk("start to mount %s...\n", dev_name);
 	start = jiffies;
 
 	/* Discard magic */
