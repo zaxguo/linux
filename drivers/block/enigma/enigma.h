@@ -31,6 +31,7 @@ struct enigma_cb {
 	struct mutex btt_mtx[MAX_DEV];
 	struct crypto_skcipher *cipher;
 	uint8_t actual;
+	uint8_t keylen;
 };
 
 struct lookup_result {

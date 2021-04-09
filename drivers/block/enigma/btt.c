@@ -21,23 +21,29 @@ enigma_lock btt_lock;
 // in-place en/decryption
 // TODO: move this to TZ
 // note: the in address cannot be a stack addr
-static int endec_btt_entry(u8 *in, int endec) {
-	int err;
+static int endec_btt_entry(u8 *in, int endec, struct skcipher_request *_req) {
+	int err, keylen;
 	/* ECB DES 64 -- blk size = 8 must be aligned */
-	u8 iv[8];
+	/*u8 iv[8];*/
+	u8 iv[enigma_cb.keylen];
+	keylen = enigma_cb.keylen;
+	memset(iv, 0, keylen);
 	struct scatterlist sg;
-	struct skcipher_request *req = NULL;
+	struct skcipher_request *req = _req;
 	struct crypto_skcipher *tfm = enigma_cb.cipher;
-	req = skcipher_request_alloc(tfm, GFP_KERNEL);
+	if (!req) {
+		req = skcipher_request_alloc(tfm, GFP_KERNEL);
+	}
 	if (IS_ERR(req)) {
 		lwg("cannot allocate req...\n");
 		return 0;
 	}
 	/* make iv (i.e. nonce) uniformly 0  */
 	/*sg_init_one(&sg, in, BTT_ENTRY_SIZE);*/
-	sg_init_one(&sg, in, 8);
+	/* the size must be the multiple of block size, e.g. 16 */
+	sg_init_one(&sg, in, 4096);
 	skcipher_request_set_callback(req, 0, NULL, NULL);
-	skcipher_request_set_crypt(req, &sg, &sg, 8, iv);
+	skcipher_request_set_crypt(req, &sg, &sg, 4096, iv);
 
 	if (endec == BTT_ENC) {
 		err = crypto_skcipher_encrypt(req);
@@ -47,13 +53,14 @@ static int endec_btt_entry(u8 *in, int endec) {
 	if (err) {
 		pr_err("Error encrypting btt entry...\n");
 	}
-	skcipher_request_free(req);
+	if (!_req)
+		skcipher_request_free(req);
 	return 0;
 }
 
 static int encrypt_btt_entry(btt_e *entry) {
 #if NEEDS_ENDEC
-	return endec_btt_entry((u8 *)entry, BTT_ENC);
+	return endec_btt_entry((u8 *)entry, BTT_ENC, NULL);
 #else
 	return 0;
 #endif
@@ -65,7 +72,7 @@ int decrypt_btt_entry(btt_e *e_block) {
 	u8 *entry = kmalloc(sizeof(btt_e), GFP_KERNEL);
 	/* TODO: seems non-avoidable memory move.. we have to do world switch anyway */
 	memcpy(entry, e_block, sizeof(btt_e));
-	endec_btt_entry((u8 *)entry, BTT_DEC);
+	endec_btt_entry((u8 *)entry, BTT_DEC, NULL);
 	memcpy(e_block, entry, sizeof(btt_e));
 	kfree(entry);
 #else
@@ -158,24 +165,27 @@ int free_btt(btt_e *btt) {
 	return 0;
 }
 
-static int init_enigma_crypto(struct crypto_skcipher **cipher) {
+static int init_enigma_crypto(const char *alg, struct crypto_skcipher **cipher, uint8_t keylen) {
 	int err;
 	struct crypto_skcipher *tfm = NULL;
-	// lwg: symmetric key
-	u8 key[8];
+	// lwg: 64bit for des
+	/*u8 key[8];*/
+	/* 128bit for aes */
+	u8 key[keylen];
+	memset(key, 0, keylen);
 	/* lwg: des has cipher block size of 8B */
-	tfm = crypto_alloc_skcipher("ecb(des)", 0, 0);
+	tfm = crypto_alloc_skcipher(alg, 0, 0);
 	if (IS_ERR(tfm)) {
 		pr_err("Error allocating crypto handle: %ld\n", PTR_ERR(tfm));
 		return PTR_ERR(tfm);
 	}
-	lwg("gonna call %pf\n", tfm->setkey);
+	/*lwg("gonna call %pf key size = %d\n", tfm->setkey, sizeof(*key));*/
 	err = crypto_skcipher_setkey(tfm, key, sizeof(key));
 	if (err) {
 		pr_err("Error setting key: %d\n", err);
 	}
 	*cipher = tfm;
-	lwg("enigma crypto sucessfully set key...\n");
+	lwg("enigma crypto sucessfully set, cipher = %s, key size:%d bits...\n", alg, sizeof(key)* 8);
 	return 0;
 }
 
@@ -235,15 +245,22 @@ int copy_btt(int from, int to) {
 }
 
 int encrypt_btt(int dev_id) {
-	int i;
+	int i, pages;
 	btt_e before,after;
 	btt_e *entry = get_btt_for_device(dev_id);
 	u64 start, delta;
 	start = jiffies;
-	for (i = 0; i < BTT_SIZE; i++, entry++) {
-		before = *entry;
-		endec_btt_entry((u8 *)entry, BTT_ENC);
-		after = *entry;
+	struct skcipher_request *req = skcipher_request_alloc(enigma_cb.cipher, GFP_KERNEL);
+	if (!req) {
+		lwg("fail to alloc cipher reuqest!\n");
+	}
+	pages = (BTT_SIZE * BTT_ENTRY_SIZE) >> 12;
+	for (i = 0; i < pages; i++, entry += (1 << 10)) {
+		/*before = *entry;*/
+		endec_btt_entry((u8 *)entry, BTT_ENC, req);
+		/* lwg: used to verify endec works */
+		/*endec_btt_entry((u8 *)entry, BTT_DEC, req);*/
+		/*after = *entry;*/
 		/*lwg("before: %ld --  after: %16lx\n", before, after);*/
 	}
 	delta = jiffies - start;
@@ -255,10 +272,11 @@ int encrypt_btt(int dev_id) {
 int init_enigma_cb (void) {
 	int ret;
 	struct enigma_cb* cb = &enigma_cb;
-	ret = init_enigma_crypto(&cb->cipher);
+	cb->keylen = 32;
+	const char *alg = "xts(aes)";
+	ret = init_enigma_crypto(alg,&cb->cipher, cb->keylen);
 	cb->actual = 0;
 	mutex_init(&btt_lock);
-	lwg("enigma_cb initialized tfm -- %p\n", enigma_cb.cipher);
 	lwg("enigma cb initialized..\n");
 	return 0;
 }
