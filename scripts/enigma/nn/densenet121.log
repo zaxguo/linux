@@ -8941,4 +8941,3 @@
      0.012096 sigaltstack(NULL, {ss_sp=0xc80bb0, ss_flags=0, ss_size=16384}) = 0
      0.000067 sigaltstack({ss_sp=NULL, ss_flags=SS_DISABLE, ss_size=0}, NULL) = 0
      0.159612 exit_group(0)             = ?
-     0.012655 +++ exited with 0 +++
