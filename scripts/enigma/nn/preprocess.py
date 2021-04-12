@@ -22,26 +22,25 @@ syscall = re.compile(p)
 
 def process_one(t):
     f = open(t, 'r')
-    out = open(t + '.trace', 'w')
+    out = open(t + '.pread', 'w')
     offset = 0
     for line in f:
         call = syscall.search(line)
         if call:
             op = call[1]
-            s = '{0},{1},{2}\n'
+            size = 0
             if op == 'lseek':
                 size = call[2]
                 arg = call[3]
-                s = s.format(1,size,0)
-                # out.write(s)
+                offset = int(size)
             elif op == 'read':
-                size = call[3]
-                s = s.format(0, size, 0)
-                # out.write(s)
+                size = int(call[3])
+                s = '{0},{1},{2}\n'.format(0, size, offset)
+                offset += size
+                out.write(s)
             else:
                 while True:
                     print("wrong op!!!")
-            out.write(s)
     out.close()
     f.close()
 
