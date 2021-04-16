@@ -422,7 +422,7 @@ static int lo_write_bvec(struct loop_device *lo, struct file *file, struct bio_v
 			/* sanity check */
 			BUG_ON(disk_blk == NULL_BLK);
 			/* Out of range of emu disk! */
-			if ((lo->lo_number != actual_id) && (disk_blk > 800000)) {
+			if ((lo->lo_number != actual_id) && (disk_blk > 1400000)) {
 				lwg("get %d...exceeding max btt size in tz!!\n", disk_blk);
 				BUG_ON(1);
 			}
@@ -2316,7 +2316,7 @@ static btt_e enigma_dump_emu_disk(btt_e blk) {
 
 
 static int enigma_dbg_show(struct seq_file *s, void *unused) {
-	char *btt_path = "/tmp/btt";
+	char *btt_path = "/root/btt";
 	struct file *btt_f = filp_open(btt_path, O_RDWR | O_CREAT, 0);
 	int i, err;
 	loff_t pos = 0;
@@ -2325,8 +2325,8 @@ static int enigma_dbg_show(struct seq_file *s, void *unused) {
 		lwg("fail to get page!\n");
 	}
 
-	encrypt_btt(0);
-	return 0;
+	/*encrypt_btt(0);*/
+	/*return 0;*/
 
 	/*check_armtf();*/
 	for (i = 0; i < BTT_SIZE; i++) {

@@ -26,8 +26,9 @@ for line in f:
         prev = curr
 
 fig, ax = plt.subplots()
+fig.set_size_inches(4, 1.8)
 y = np.asarray(y)
 #colormap = sns.color_palette("Greens")
 colormap = sns.color_palette("RdYlGn_r", as_cmap=True)
-sns.heatmap([y], cmap=colormap)
+sns.heatmap([y], cmap=colormap, cbar_kws={"orientation": "horizontal"}, xticklabels = [""], yticklabels=[""])
 plt.show()
