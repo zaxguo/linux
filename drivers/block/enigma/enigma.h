@@ -14,7 +14,7 @@
 /* # of BTT entries == actual disk sector */
 #define BTT_SIZE	btt_size
 #define BTT_ENTRY_SIZE (sizeof(btt_e))
-#define MAX_DEV		25
+#define MAX_DEV		51
 
 #define BTT_ENC 0
 #define BTT_DEC	1

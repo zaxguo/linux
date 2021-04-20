@@ -74,7 +74,7 @@ static void *replay(void *args) {
 		delta = (end.tv_sec - start.tv_sec) + (end.tv_nsec - start.tv_nsec)/BILLION;
 		printf("[%d]: takes %f seconds for actual to finish.\n", fs_cnt, delta);
 	}
-	printf("[%d]:replayed %d ops: rw %d bytes to %s.\n", arg->tid, idx, total, dest);
+	//printf("[%d]:replayed %d ops: rw %d bytes to %s.\n", arg->tid, idx, total, dest);
 }
 
 static int construct_lib(char *lib_path) {

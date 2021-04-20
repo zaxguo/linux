@@ -570,7 +570,7 @@ static int lo_read_simple(struct loop_device *lo, struct request *rq,
 
 				__rq_for_each_bio(bio, rq)
 					zero_fill_bio(bio);
-				lwg("hello? len = %d\n", len);
+				/*lwg("hello? len = %d\n", len);*/
 				break;
 			}
 		}
@@ -1956,7 +1956,7 @@ static const struct block_device_operations lo_fops = {
 /*
  * And now the modules code and kernel interface.
  */
-static int max_loop;
+static int max_loop = MAX_DEV;
 module_param(max_loop, int, S_IRUGO);
 MODULE_PARM_DESC(max_loop, "Maximum number of loop devices");
 module_param(max_part, int, S_IRUGO);
@@ -2442,7 +2442,7 @@ static int __init loop_init(void)
 		loop_add(&lo, i);
 	mutex_unlock(&loop_index_mutex);
 
-	printk(KERN_INFO "loop: module loaded\n");
+	printk(KERN_INFO "loop: module loaded, max_loop = %d\n", max_loop);
 
 	// lwg: one-time init of enigma loop cb -- turn off for strawman approach
 	init_enigma_cb();
