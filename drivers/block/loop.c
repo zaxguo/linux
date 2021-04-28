@@ -94,6 +94,9 @@ static int part_shift;
 static int actual_id = 0;
 int btt_size = 0;
 
+static uint64_t filedata_cnt = 0;
+static uint64_t metadata_cnt = 0;
+
 static void check_armtf(void) {
 	void *mm = phys_to_virt(0x10100000);
 	if (mm) {
@@ -306,7 +309,7 @@ static inline int need_update_btt(int req_op, btt_e tz_block) {
 	return 0;
 }
 
-static btt_e get_disk_blk(int dev_id, btt_e sector, struct page *pg, int req_op) {
+static btt_e get_disk_blk(int dev_id, btt_e sector, struct page *pg, int req_op, int *is_filedata) {
 	if (!has_btt_for_device(dev_id)) {
 		return sector;
 	}
@@ -374,6 +377,8 @@ static btt_e get_disk_blk(int dev_id, btt_e sector, struct page *pg, int req_op)
 				/* read to sybil images' filedata blocks will get rejected by 0's */
 				} else if (req_op == REQ_OP_READ) {
 					/*lwg("feeding 0s t %lld\n", e_block);*/
+					++filedata_cnt;
+					*is_filedata = 1;
 					e_block = 0;
 				}
 				break;
@@ -410,15 +415,17 @@ static int lo_write_bvec(struct loop_device *lo, struct file *file, struct bio_v
 			bvec->bv_offset = start_off + (k << 9);
 			mutex_lock(&btt_lock);
 			btt_e disk_blk;
-			disk_blk = get_disk_blk(lo->lo_number, *sector_iter, bvec->bv_page, REQ_OP_WRITE);
+			disk_blk = get_disk_blk(lo->lo_number, *sector_iter, bvec->bv_page, REQ_OP_WRITE, NULL);
 			mutex_unlock(&btt_lock);
 			if (disk_blk == FILEDATA) {
 				/* omit data write */
 				bw += (1 << 9);
 				/*lwg("omitting writing %lld\n", sector_iter);*/
-				/*mdelay(1);*/
+				/* mdelay(1); */
+				++filedata_cnt;
 				continue;
 			}
+			++metadata_cnt;
 			/* sanity check */
 			BUG_ON(disk_blk == NULL_BLK);
 			/* Out of range of emu disk! */
@@ -505,8 +512,7 @@ static int lo_write_transfer(struct loop_device *lo, struct request *rq,
 	return ret;
 }
 
-static int lo_read_simple(struct loop_device *lo, struct request *rq,
-		loff_t pos)
+static int lo_read_simple(struct loop_device *lo, struct request *rq, loff_t pos)
 {
 	struct bio_vec bvec;
 	struct req_iterator iter;
@@ -543,19 +549,25 @@ static int lo_read_simple(struct loop_device *lo, struct request *rq,
 			/*lwg("%lld, %p, %d, %d, is_user = %d, in_irq = %d, in_atomic = %d\n", sector_iter, bvec.bv_page, orig_len, bvec.bv_offset, test_bit(PG_user, &bvec.bv_page->flags), in_interrupt(), in_atomic());*/
 			u64 start, delta;
 			for (k = 0; k < sector_cnt; k++, sector_iter++) {
+				int is_filedata = 0;
 				iov_iter_bvec(&i[k], ITER_BVEC, &bvec, 1, 1 << 9);
-				disk_blk = get_disk_blk(lo->lo_number, sector_iter, bvec.bv_page, REQ_OP_READ);
+				disk_blk = get_disk_blk(lo->lo_number, sector_iter, bvec.bv_page, REQ_OP_READ, &is_filedata);
 				pos_iter = disk_blk << 9;
 				bvec.bv_offset = start_off + (k << 9);
-				/*lwg("reading [%lld->%d], offset = %d\n", sector_iter, disk_blk, bvec.bv_offset);*/
 				/*start = ktime_get_mono_fast_ns();*/
+				if (is_filedata) {
+					len += (1 << 9);
+					/*lwg("omit reading filedata...\n");*/
+					continue;
+				} else {
+					++metadata_cnt;
+				}
 				len += vfs_iter_read(lo->lo_backing_file, &i[k], &pos_iter, 0);
 				/*delta = ktime_get_mono_fast_ns()- start;*/
 				/*lwg("%d,%ld,%d,%ld\n", lo->lo_number, sector_iter, disk_blk, delta);*/
-				if (lo->lo_number != actual_id && !is_filedata_blk(bvec.bv_page)) {
-					/* 12 us delay */
+				/*if (lo->lo_number != actual_id && !is_filedata_blk(bvec.bv_page)) {*/
+				if (lo->lo_number != actual_id && !is_filedata) {
 					ndelay(1600);
-					/*lwg("delay end..\n");*/
 				}
 				if (len < 0) {
 					lwg("hello?\n");
@@ -567,7 +579,6 @@ static int lo_read_simple(struct loop_device *lo, struct request *rq,
 			/*if (len != bvec.bv_len) {*/
 			if (len != orig_len) {
 				struct bio *bio;
-
 				__rq_for_each_bio(bio, rq)
 					zero_fill_bio(bio);
 				/*lwg("hello? len = %d\n", len);*/
@@ -2349,6 +2360,7 @@ static int enigma_dbg_show(struct seq_file *s, void *unused) {
 		kfree(entry);
 	}
 	printk("btt dumped to %s\n", btt_path);
+	printk("filedata ops: %ld, metadat ops: %ld\n", filedata_cnt, metadata_cnt);
 	return 0;
 }
 

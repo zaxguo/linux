@@ -2773,7 +2773,7 @@ long do_mount(const char *dev_name, const char __user *dir_name,
 	u64 start, end;
 
 
-	printk("start to mount %s...\n", dev_name);
+	/*printk("start to mount %s...\n", dev_name);*/
 	start = jiffies;
 
 	/* Discard magic */
@@ -2854,7 +2854,7 @@ dput_out:
 	path_put(&path);
 
 	end = jiffies - start;
-	printk("mounting %s on %s costs %d ms", dev_name, dir_name, jiffies_to_msecs(end));
+	/*printk("mounting %s on %s costs %d ms", dev_name, dir_name, jiffies_to_msecs(end));*/
 	return retval;
 }
 

@@ -231,9 +231,13 @@ static inline void incr_blk_ref(btt_e pblk) {
 /* copy btt to another device */
 int copy_btt(int from, int to) {
 	int i;
+	u64 start, delta;
 	btt_e *from_btt = get_btt_for_device(from);
 	btt_e *to_btt = get_btt_for_device(to);
+	start = jiffies;
 	memcpy(to_btt, from_btt, BTT_SIZE * sizeof(btt_e));
+	delta = jiffies - start;
+	printk("forking memcpy takes %d ms..\n", jiffies_to_msecs(delta));
 	for (i = 0; i < (int)BTT_SIZE; i++) {
 		btt_e pblk = to_btt[i];
 		if (pblk_allocated(pblk)) {

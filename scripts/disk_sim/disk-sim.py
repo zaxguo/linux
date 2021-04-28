@@ -12,8 +12,6 @@ class app(Enum):
     ROSBAG   = 1
 
 
-
-
 # Some parameters
 
 # initial # of  sbd
