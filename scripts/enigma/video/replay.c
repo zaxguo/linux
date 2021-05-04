@@ -64,12 +64,13 @@ static void *replay(void *args) {
 	}
 	total = 0;
 	idx = 0;
-	ret = snprintf(dest, 50, "/sybil/fs%d/video.log", arg->tid);
-	txt = open(dest, O_RDWR);
 	do {
-		ret = write(txt, arg->data, 128);
+		ret = snprintf(dest, 50, "/sybil/fs%d/video%d.log", arg->tid, idx);
+		txt = open(dest, O_RDWR | O_CREAT, S_IRWXU);
+		ret = write(txt, arg->data, 102400);
 		size = replay_write_from_trace(idx++);
 		usleep(size);
+		close(txt);
 	} while(idx < 100);
 	if (arg->tid == 0) {
 		clock_gettime(CLOCK_MONOTONIC, &end);
@@ -92,8 +93,8 @@ int main(int argc, char *argv[]) {
 	}
 	trace_lib = construct_lib("./bangor.log");
 	/* prepare the data buffer */
-	data = malloc(9000);
-	memset(data, 'a', 9000);
+	data = malloc(102400);
+	memset(data, 'a', 102400);
 	for (i = 0; i < fs_cnt; i++) {
 		struct args* arg = malloc(sizeof(struct args));
 		/* read buffer */
