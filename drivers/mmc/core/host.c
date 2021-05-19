@@ -61,9 +61,11 @@ void mmc_unregister_host_class(void)
 void mmc_retune_enable(struct mmc_host *host)
 {
 	host->can_retune = 1;
-	if (host->retune_period)
+	if (host->retune_period) {
 		mod_timer(&host->retune_timer,
 			  jiffies + host->retune_period * HZ);
+		printk("lwg:%s:%d:setting up retune timer for %s: %ds\n", __func__, __LINE__, host->card->info, host->retune_period);
+	}
 }
 
 /*
@@ -142,6 +144,7 @@ int mmc_retune(struct mmc_host *host)
 
 	host->doing_retune = 1;
 
+	printk("lwg:%s:%d:retuning %s...\n", __func__, __LINE__, mmc_hostname(host));
 	if (host->ios.timing == MMC_TIMING_MMC_HS400) {
 		err = mmc_hs400_to_hs200(host->card);
 		if (err)

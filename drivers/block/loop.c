@@ -94,8 +94,10 @@ static int part_shift;
 static int actual_id = 0;
 int btt_size = 0;
 
-static uint64_t filedata_cnt = 0;
-static uint64_t metadata_cnt = 0;
+static uint64_t filedata_read = 0;
+static uint64_t filedata_write = 0;
+static uint64_t metadata_read = 0;
+static uint64_t metadata_write = 0;
 
 static void check_armtf(void) {
 	void *mm = phys_to_virt(0x10100000);
@@ -377,7 +379,7 @@ static btt_e get_disk_blk(int dev_id, btt_e sector, struct page *pg, int req_op,
 				/* read to sybil images' filedata blocks will get rejected by 0's */
 				} else if (req_op == REQ_OP_READ) {
 					/*lwg("feeding 0s t %lld\n", e_block);*/
-					++filedata_cnt;
+					++filedata_read;
 					*is_filedata = 1;
 					e_block = 0;
 				}
@@ -422,10 +424,10 @@ static int lo_write_bvec(struct loop_device *lo, struct file *file, struct bio_v
 				bw += (1 << 9);
 				/*lwg("omitting writing %lld\n", sector_iter);*/
 				/* mdelay(1); */
-				++filedata_cnt;
+				++filedata_write;
 				continue;
 			}
-			++metadata_cnt;
+			++metadata_write;
 			/* sanity check */
 			BUG_ON(disk_blk == NULL_BLK);
 			/* Out of range of emu disk! */
@@ -560,7 +562,7 @@ static int lo_read_simple(struct loop_device *lo, struct request *rq, loff_t pos
 					/*lwg("omit reading filedata...\n");*/
 					continue;
 				} else {
-					++metadata_cnt;
+					++metadata_read;
 				}
 				len += vfs_iter_read(lo->lo_backing_file, &i[k], &pos_iter, 0);
 				/*delta = ktime_get_mono_fast_ns()- start;*/
@@ -1259,12 +1261,15 @@ static int loop_set_fd(struct loop_device *lo, fmode_t mode,
 		struct gendisk *disk = lo->lo_disk;
 		init_btt_for_device(lo->lo_number);
 		/* dirty, we let loop0 be actual, other will get btt from loop1 */
+		/*printk("COW disabled!\n");*/
+#if 1
 		if (lo->lo_number > 1) {
 			start = jiffies;
 			copy_btt(1, lo->lo_number);
 			delta = jiffies - start;
 			printk("forking costs %d msec..\n", jiffies_to_msecs(delta));
 		}
+#endif 
 		disk->flags |= GENHD_HAS_BTT;
 	}
 	return 0;
@@ -2335,12 +2340,15 @@ static int enigma_dbg_show(struct seq_file *s, void *unused) {
 	if (!pg) {
 		lwg("fail to get page!\n");
 	}
+	printk("filedata read: %ld, write: %ld\n", filedata_read, filedata_write);
+	printk("metadata read: %ld, write: %ld\n", metadata_read, metadata_write);
 
 	/*encrypt_btt(0);*/
 	/*return 0;*/
 
 	/*check_armtf();*/
-	for (i = 0; i < BTT_SIZE; i++) {
+	/*for (i = 0; i < BTT_SIZE; i++) {*/
+	for (i = 0; i < 1400000; i++) {
 		void *entry = kmalloc(128, GFP_KERNEL);
 		btt_e cnt;
 #if 0
@@ -2360,7 +2368,6 @@ static int enigma_dbg_show(struct seq_file *s, void *unused) {
 		kfree(entry);
 	}
 	printk("btt dumped to %s\n", btt_path);
-	printk("filedata ops: %ld, metadat ops: %ld\n", filedata_cnt, metadata_cnt);
 	return 0;
 }
 
@@ -2458,6 +2465,7 @@ static int __init loop_init(void)
 
 	// lwg: one-time init of enigma loop cb -- turn off for strawman approach
 	init_enigma_cb();
+	printk("BTT disabled!!\n");
 	/*check_armtf();*/
 	return 0;
 

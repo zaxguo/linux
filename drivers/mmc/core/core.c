@@ -979,8 +979,11 @@ int mmc_execute_tuning(struct mmc_card *card)
 	u32 opcode;
 	int err;
 
-	if (!host->ops->execute_tuning)
+	if (!host->ops->execute_tuning) {
+
+		printk("lwg:%s:%d:%s does not have tuning!\n", __func__, __LINE__, mmc_hostname(host));
 		return 0;
+	}
 
 	if (host->cqe_on)
 		host->cqe_ops->cqe_off(host);

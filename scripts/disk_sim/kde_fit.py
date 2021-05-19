@@ -54,5 +54,6 @@ def fit(data, key):
 def init_kde(keyword):
     obj = process_file("../../../../Documents/research/enigma/bangor.csv")
     return fit(obj[keyword], keyword)
+    #return fit(obj[keyword], keyword)
 
 

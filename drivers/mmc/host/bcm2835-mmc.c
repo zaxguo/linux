@@ -139,6 +139,8 @@ static inline void bcm2835_mmc_writel(struct bcm2835_host *host, u32 val, int re
 	writel(val, host->ioaddr + reg);
 	udelay(BCM2835_SDHCI_WRITE_DELAY(max(host->clock, MIN_FREQ)));
 
+	/*printk("%p:%08x\n", host->ioaddr + reg, val);*/
+
 	delay = ((mmc_debug >> 16) & 0xf) << ((mmc_debug >> 20) & 0xf);
 	if (delay && !((1<<from) & mmc_debug2))
 		udelay(delay);
@@ -158,7 +160,9 @@ static inline void mmc_raw_writel(struct bcm2835_host *host, u32 val, int reg)
 static inline u32 bcm2835_mmc_readl(struct bcm2835_host *host, int reg)
 {
 	lockdep_assert_held_once(&host->lock);
-	return readl(host->ioaddr + reg);
+	u32 val;
+	val = readl(host->ioaddr + reg);
+	return val;
 }
 
 static inline void bcm2835_mmc_writew(struct bcm2835_host *host, u16 val, int reg)
@@ -1412,6 +1416,7 @@ untasklet:
 
 static int bcm2835_mmc_probe(struct platform_device *pdev)
 {
+	trace_printk("probe start\n");
 	struct device *dev = &pdev->dev;
 	struct device_node *node = dev->of_node;
 	struct clk *clk;
@@ -1507,6 +1512,7 @@ static int bcm2835_mmc_probe(struct platform_device *pdev)
 err:
 	mmc_free_host(mmc);
 
+	trace_printk("probe end\n");
 	return ret;
 }
 

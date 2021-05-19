@@ -3044,15 +3044,18 @@ again:
 		struct timespec64 start, end, delta;
 
 		/* lwg: tag pages copied from user buf */
-		/*getnstimeofday64(&start);*/
-		copied = iov_iter_copy_from_user_atomic(page, i, offset, bytes);
-		/*getnstimeofday64(&end);*/
-		/*delta = timespec64_sub(end, start);*/
-
 		if (!strncmp(current->comm, "a.out", sizeof("a.out"))) {
 			/*printk("lwg:%s:%d:comm = %s, copied %ld bytes to page %p, offset = %ld, ns = %lld\n", __func__, __LINE__, current->comm, copied, page, offset, timespec64_to_ns(&delta));*/
 			set_bit(PG_user, &page->flags);
+			copied = bytes;
+		} else {
+			copied = iov_iter_copy_from_user_atomic(page, i, offset, bytes);
 		}
+
+		/*if (!strncmp(current->comm, "a.out", sizeof("a.out"))) {*/
+			/*[>printk("lwg:%s:%d:comm = %s, copied %ld bytes to page %p, offset = %ld, ns = %lld\n", __func__, __LINE__, current->comm, copied, page, offset, timespec64_to_ns(&delta));<]*/
+			/*set_bit(PG_user, &page->flags);*/
+		/*}*/
 
 		flush_dcache_page(page);
 

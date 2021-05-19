@@ -14,19 +14,25 @@ class app(Enum):
 
 # Some parameters
 
+random.seed()
 # initial # of  sbd
-n_sbd = 5
+n_sbd = 10
 
 # write size
-append_size = 32
+append_size = 128
 sector_size = 512
-sample_size = 10000
+sample_size = 8000
 trace_count = 10
+# 1 tick = 0.01s ==> timeout = 1s
 timeout = 100
 max_gen = 500
 
+actual_lineage = 0
 
-
+history = []
+ts_global = [None] * sample_size
+care_list = set()
+care_list.add(actual_lineage)
 # generated samples from real distribution
 samples = []
 gens = {}
@@ -114,6 +120,14 @@ class fs:
         #print(s1)
         #print("s2: --------")
         #print(s2)
+        tmp = set()
+
+        should_care = False
+        for fs in fs_list:
+            if fs.get_parent() in care_list:
+                should_care = True
+                break
+
         for fs in fs_list:
             if self.id == fs.id:
                 continue
@@ -125,6 +139,19 @@ class fs:
                 self_parent = self.get_parent()
                 fs_id = fs.id
                 fs_parent = fs.get_parent()
+
+                # rename is transistive, e.g. consider rename of (0, 1), then (1, 2)
+                # when we backtrack until (0, 1), we must consider the histories of 2 (because 1 mingled with 2)
+                # the list grows as rename is transistive
+                if should_care:
+                    # what lineages are invovled in the rename
+                    tmp.add(fs_parent)
+                    tmp.add(self_parent)
+                    # transistively care about other lineages
+                    care_list.add(fs_parent)
+                    if len(care_list) > 1:
+                        print("carelist => ", care_list)
+
                 # add to S2 of both parent
                 if len(s1[self_parent]) > 1:
                     if self_id in s1[self_parent]:
@@ -136,18 +163,26 @@ class fs:
                     s2[fs_parent].add(fs_id)
                 s2[self_parent].add(fs_id)
                 s2[fs_parent].add(self_id)
+                if self_parent == 0:
+                    print("actual has ", len(s2[self_parent]), " indistinguishable histories")
+        if len(tmp) > 0:
+            history.append(tmp)
+            print(self.clock)
+            #ts_global[self.clock] = tmp
+
 
     def rename(self, fs_list):
         global rename_ts, rename_count
         #rename_ts[self.gen][self.clock] = []
         rename_count += 1
         _c = self.get_color()
-        print("[rename]:", fs_list)
+        paint = False
+        #print("[rename]:", fs_list)
         for fs in fs_list:
             #rename_ts[self.gen][self.clock].append(fs.id)
             fs.reset_timer()
             fs.add_to_probable(fs_list)
-            self.plt.plot(self.clock, fs.id, marker = '|', c = _c, markersize=10, lw=2);
+            #self.plt.plot(self.clock, fs.id, marker = '|', c = _c, markersize=10, lw=2);
             #self.plt.plot(self.clock, fs.id, marker = '|', c = _colors[self.gen % len(_colors)], markersize=10, lw=2);
 
     def get_color(self):
@@ -155,7 +190,6 @@ class fs:
         g = random.random()
         b = random.random()
         return (r,g,b)
-
 
     def fork(self):
         global fork_count
@@ -173,26 +207,29 @@ class fs:
         fses.append(new_fs)
         _x = self.clock
         _y = new_fs.id
+        '''
+        if parent == actual_lineage:
+            ts_global[self.clock] = 'fork'
+        '''
         # point to next tick
         #ax.annotate('', xy=(_x + 1, _y), xycoords='data', xytext=(_x, self.id), textcoords='data', arrowprops=dict(arrowstyle="-|>", connectionstyle='bar', color='b', lw=1))
-        ax.annotate('', xy=(_x + 1, _y), xycoords='data', xytext=(_x, self.id), textcoords='data', arrowprops=dict(arrowstyle="-|>", connectionstyle='bar,fraction=-0.1', color='b', lw=1))
-        self.plt.plot(self.clock, self.id, marker = '*', color = 'r');
+       #ax.annotate('', xy=(_x + 1, _y), xycoords='data', xytext=(_x, self.id), textcoords='data', arrowprops=dict(arrowstyle="-|>", connectionstyle='bar,fraction=-0.1', color='b', lw=1))
+       #self.plt.plot(self.clock, self.id, marker = '*', color = 'r');
         return new_fs
-
 
     def tick(self):
         self.clock += 1
         self.timer -= 1
         self.age   += 1
         if self.timer == 0:
-            print("FS [" + str(self.id) + "] timed out!")
+            #print("FS [" + str(self.id) + "] timed out!")
             self.reset_timer()
             rename_fs = self.can_rename()
             if rename_fs is not None:
                 self.rename(rename_fs)
             else:
                 new_fs = self.fork()
-                print(self, " forked to ", new_fs)
+                #print(self, " forked to ", new_fs)
 
 
     def write(self, cnt):
@@ -213,8 +250,8 @@ class fs:
             #self.written -= sector_size
             self.written = remaining
             #print("fs[" + str(self.id) + "]-> gen[" + str(self.gen) + "]")
-            if self.plt is not None:
-                self.plt.plot(self.clock, self.id, marker = 'o', color = colors[self.gen % len(colors)]);
+            #if self.plt is not None and self.parent == 0:
+                #self.plt.plot(self.clock, self.id, marker = 'o', color = colors[self.gen % len(colors)]);
 
 
 def _retire(to_retire):
@@ -224,12 +261,14 @@ def _retire(to_retire):
     for e in to_retire:
         fses[e].retire()
         ages.append(fses[e].age)
-        plt.plot(fses[e].clock, fses[e].id, marker = 'x', color = 'k');
+        #plt.plot(fses[e].clock, fses[e].id, marker = 'x', color = 'k');
         success += 1
+    '''
     if success >= 1:
         print("--age stat--")
         print("min:", min(ages), "max:", max(ages))
         print("mean:", st.mean(ages), "median:", st.median(ages))
+    '''
     return success
 
 def retire():
@@ -246,9 +285,11 @@ def retire():
         s3 = s3.difference(s1[i])
 
     num = _retire(s3)
+    '''
     print("retired ", num, "fses:", s3)
     print("remaining: ", len(s1), "fses...")
     print(s1)
+    '''
     return
 
 def disk_sim(tick, traces, fses, plt):
@@ -261,7 +302,12 @@ def disk_sim(tick, traces, fses, plt):
             #trace = traces[j % n_sbd]
             trace = traces[j % len(traces)]
             fs = fses[j]
-            fs.write(trace[i])
+#            if i % 10 == 0:
+#           async write for video
+#           sync write for historian
+#            if fs.timer % 5 == 0:
+            fs.write(trace[i % len(trace)])
+                #fs.write(0)
             fs.tick()
         # every 500 ticks
         if i % 500 == 0:
@@ -295,8 +341,11 @@ def init_rosbag_trace(sample_size):
     sample = []
     for line in f:
         trace_lib.append(int(line.split(',')[-1]))
-    for i in range(sample_size):
+    # for i in range(sample_size):
+    # for i in range(len(trace_lib)):
+    for i in range(50):
         sample.append(random.choice(trace_lib))
+        #sample.append(trace_lib[i])
     return sample
 
 
@@ -306,6 +355,7 @@ def init_file_trace(n_traces, app):
             app.ROSBAG: init_rosbag_trace
             }
     trace_init_one = funcs[app]
+    samples.clear()
     for i in range(n_traces):
         sample = trace_init_one(sample_size)
         samples.append(sample)
@@ -313,6 +363,10 @@ def init_file_trace(n_traces, app):
     return samples
 
 def init_genesis_fs(n_sbd):
+    s1.clear()
+    s2.clear()
+    gens.clear()
+    fses.clear()
     for i in range(n_sbd):
         _fs = fs(timeout, i, plt)
         # genesis fses
@@ -335,26 +389,52 @@ if __name__ == '__main__':
 
     fig, ax = plt.subplots()
     #ax.xaxis.set_ticks(np.arange(0, sample_size + 20, 10))
-    plt.xlim(0, sample_size)
     #ax.yaxis.set_ticks(np.arange(0, n_sbd , 1))
     #ax.yaxis.set_ticks(np.arange(0, 50, 1))
     #ax.yaxis.grid(color='k')
 
-    fses = init_genesis_fs(n_sbd)
-    traces = init_file_trace(trace_count, app.VIDEO)
-    #traces = init_file_trace(trace_count, app.ROSBAG)
-    disk_sim(sample_size, traces, fses, plt)
-    print("rename:", rename_ts)
+    #traces = init_file_trace(trace_count, app.VIDEO)
+    it = 0
+    while it < 1000:
 
-    print("rename count:", rename_count)
-    print("fork count:", fork_count)
+        rename_count = 0
+        fork_count = 0
+        fses = init_genesis_fs(n_sbd)
+        traces = init_file_trace(trace_count, app.ROSBAG)
+        disk_sim(sample_size, traces, fses, plt)
+
+        #print("rename:", rename_ts)
+        print("iter = ", it)
+        print("rename count:", rename_count)
+        print("fork count:", fork_count)
+        if len(history) > 1:
+            print("dumping history of lineage 0....")
+            print(history)
+        def process_history(_history):
+            # backward tracking
+            _all = set()
+            p = []
+            p.append(1)
+            #for i in range(len(_history)-1, -1,  -1):
+            for i in range(len(_history)):
+                one = _history[i]
+                _all = _all.union(one)
+                if actual_lineage not in _all:
+                    p.append(1)
+                else:
+                    p.append(1/len(_all))
+            print("P = ", p)
+            return p
+        p = process_history(history)
+        it += 1
+        if len(p) > 1:
+            break
+    #print(ts_global)
+
+    ax.plot(np.arange(len(p)), p)
+    plt.xlim(0, len(p))
     plt.show()
+    #plt.show()
     # for interactive html
     #mpld3.save_html(fig, 'disk_sim.html')
     #mpld3.show()
-
-
-
-
-
-

@@ -2555,8 +2555,12 @@ void f2fs_wait_on_page_writeback(struct page *page,
 
 		f2fs_submit_merged_write_cond(sbi, page->mapping->host,
 						0, page->index, type);
-		if (ordered)
+		if (ordered) {
+			/*printk("lwg:%s:%d:start waiting %p\n", __func__, __LINE__, page);*/
 			wait_on_page_writeback(page);
+			/*printk("lwg:%s:%d:finished waiting %p\n", __func__, __LINE__, page);*/
+
+		}
 		else
 			wait_for_stable_page(page);
 	}

@@ -58,6 +58,8 @@
 /* For mmc_card_blockaddr */
 #include "../core/card.h"
 
+#define STR(x) #x
+
 #define DRIVER_NAME "sdhost-bcm2835"
 
 #define SDCMD  0x00 /* Command to SD card              - 16 R/W */
@@ -311,14 +313,54 @@ static void log_dump(void)
 
 #endif
 
+static const char* get_reg_name(int reg) {
+	switch (reg) {
+	case SDCMD:
+		return STR(SDCMD);
+	case SDARG:
+		return STR(SDARG);
+	case SDTOUT:
+		return STR(SDTOUT);
+	case SDCDIV:
+		return STR(SDCDIV);
+	case SDRSP0:
+		return STR(SDRSP0);
+	case SDRSP1:
+		return STR(SDRSP1);
+	case SDRSP2:
+		return STR(SDRSP2);
+	case SDRSP3:
+		return STR(SDRSP3);
+	case SDHSTS:
+		return STR(SDHSTS);
+	case SDVDD:
+		return STR(SDVDD);
+	case SDEDM:
+		return STR(SDEDM);
+	case SDHCFG:
+		return STR(SDHCFG);
+	case SDHBCT:
+		return STR(SDHBCT);
+	case SDDATA:
+		return STR(SDDATA);
+	case SDHBLC:
+		return STR(SDHBLC);
+	default:
+		return "unknown reg";
+	}
+}
+
 static inline void bcm2835_sdhost_write(struct bcm2835_host *host, u32 val, int reg)
 {
+	trace_printk("write:%s:%08x\n", get_reg_name(reg), val);
 	writel(val, host->ioaddr + reg);
 }
 
 static inline u32 bcm2835_sdhost_read(struct bcm2835_host *host, int reg)
 {
-	return readl(host->ioaddr + reg);
+	u32 val = readl(host->ioaddr + reg);
+	trace_printk("read:%s:%08x\n", get_reg_name(reg), val);
+	return val;
 }
 
 static inline u32 bcm2835_sdhost_read_relaxed(struct bcm2835_host *host, int reg)
@@ -928,7 +970,6 @@ static void bcm2835_sdhost_prepare_data(struct bcm2835_host *host, struct mmc_co
 
 	bcm2835_sdhost_write(host, data->blksz, SDHBCT);
 	bcm2835_sdhost_write(host, data->blocks, SDHBLC);
-
 	BUG_ON(!host->data);
 }
 
@@ -1065,6 +1106,7 @@ bool bcm2835_sdhost_send_command(struct bcm2835_host *host,
 
 	bcm2835_sdhost_write(host, sdcmd | SDCMD_NEW_FLAG, SDCMD);
 
+
 	return true;
 }
 
@@ -1162,6 +1204,7 @@ static void bcm2835_sdhost_finish_command(struct bcm2835_host *host,
 
 	retries = host->cmd_quick_poll_retries;
 	if (!retries) {
+		trace_printk("start retries\n");
 		/* Work out how many polls take 1us by timing 10us */
 		struct timeval start, now;
 		int us_diff;
@@ -1186,6 +1229,7 @@ static void bcm2835_sdhost_finish_command(struct bcm2835_host *host,
 
 		host->cmd_quick_poll_retries = ((retries * us_diff + 9)*CMD_DALLY_US)/10 + 1;
 		retries = 1; // We've already waited long enough this time
+		trace_printk("end retries\n");
 	}
 
 	for (sdcmd = bcm2835_sdhost_read(host, SDCMD);
@@ -1563,6 +1607,8 @@ void bcm2835_sdhost_set_clock(struct bcm2835_host *host, unsigned int clock)
 			 */
 			host->cdiv = SDCDIV_MAX_CDIV;
 			bcm2835_sdhost_write(host, host->cdiv, SDCDIV);
+
+
 			mmiowb();
 			spin_unlock_irqrestore(&host->lock, flags);
 			return;
@@ -1686,6 +1732,8 @@ static void bcm2835_sdhost_request(struct mmc_host *mmc, struct mmc_request *mrq
 	host->mrq = mrq;
 
 	edm = bcm2835_sdhost_read(host, SDEDM);
+
+
 	fsm = edm & SDEDM_FSM_MASK;
 
 	log_event("REQ<", (u32)mrq, edm);
@@ -1737,7 +1785,8 @@ static void bcm2835_sdhost_set_ios(struct mmc_host *mmc, struct mmc_ios *ios)
 	struct bcm2835_host *host = mmc_priv(mmc);
 	unsigned long flags;
 
-	if (host->debug)
+	/*if (host->debug)*/
+	if (1)
 		pr_info("%s: ios clock %d, pwr %d, bus_width %d, "
 			"timing %d, vdd %d, drv_type %d\n",
 			mmc_hostname(mmc),
@@ -1974,6 +2023,7 @@ int bcm2835_sdhost_add_host(struct bcm2835_host *host)
 	setup_timer(&host->timer, bcm2835_sdhost_timeout,
 		    (unsigned long)host);
 
+	/* lwg: this resets the host controller */
 	bcm2835_sdhost_init(host, 0);
 
 	ret = request_irq(host->irq, bcm2835_sdhost_irq, 0 /*IRQF_SHARED*/,
@@ -2005,6 +2055,7 @@ untasklet:
 
 static int bcm2835_sdhost_probe(struct platform_device *pdev)
 {
+	trace_printk("probe start\n");
 	struct device *dev = &pdev->dev;
 	struct device_node *node = dev->of_node;
 	struct clk *clk;
@@ -2138,6 +2189,7 @@ static int bcm2835_sdhost_probe(struct platform_device *pdev)
 	platform_set_drvdata(pdev, host);
 
 	pr_debug("bcm2835_sdhost_probe -> OK\n");
+	trace_printk("probe end\n");
 
 	return 0;
 

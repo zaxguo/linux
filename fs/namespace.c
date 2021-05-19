@@ -2854,7 +2854,7 @@ dput_out:
 	path_put(&path);
 
 	end = jiffies - start;
-	/*printk("mounting %s on %s costs %d ms", dev_name, dir_name, jiffies_to_msecs(end));*/
+	printk("mounting %s on %s costs %d ms", dev_name, dir_name, jiffies_to_msecs(end));
 	return retval;
 }
 

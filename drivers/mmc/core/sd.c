@@ -592,6 +592,8 @@ static int mmc_sd_init_uhs_card(struct mmc_card *card)
 	if (!status)
 		return -ENOMEM;
 
+	printk("lwg:%s;%d:hit\n", __func__, __LINE__);
+
 	/* Set 4-bit bus width */
 	if ((card->host->caps & MMC_CAP_4_BIT_DATA) &&
 	    (card->scr.bus_widths & SD_SCR_BUS_WIDTH_4)) {
