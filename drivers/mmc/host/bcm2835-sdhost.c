@@ -54,11 +54,17 @@
 #include <linux/interrupt.h>
 #include <linux/highmem.h>
 #include <soc/bcm2835/raspberrypi-firmware.h>
+#include <linux/proc_fs.h>
 
 /* For mmc_card_blockaddr */
 #include "../core/card.h"
 
 #define STR(x) #x
+
+#define CHECK_DIVERGENCE() \
+	if (val != expected) { \
+		printk("%d:not as expected (val = %08x, expected = %08x)...divergence!\n", __LINE__, val, expected); \
+	}\
 
 #define DRIVER_NAME "sdhost-bcm2835"
 
@@ -145,6 +151,8 @@
 
 #define MHZ 1000000
 
+
+static int in_replay;
 
 struct bcm2835_host {
 	spinlock_t		lock;
@@ -1510,11 +1518,122 @@ static void bcm2835_sdhost_block_irq(struct bcm2835_host *host, u32 intmask)
 	}
 }
 
+static void replay_irq_reg(struct bcm2835_host *host) {
+	u32 val, expected, word, i, j;
+	expected = 0x0000001;
+	val = bcm2835_sdhost_read(host, SDHSTS);
+	CHECK_DIVERGENCE();
+
+	val = 0x00000701;
+	bcm2835_sdhost_write(host, val, SDHSTS);
+
+	word = 16;
+	i = 0;
+	while(i < 128/word) {
+		j = 0;
+		expected = 0x00010902;
+		val = bcm2835_sdhost_read(host, SDEDM);
+		CHECK_DIVERGENCE();
+		while (j < word) {
+			val = bcm2835_sdhost_read(host, SDDATA);
+			printk("reading %08x\n...", val);
+			j++;
+		}
+		i++;
+	}
+	expected = 0x00000000;
+	val = bcm2835_sdhost_read(host, SDHSTS);
+	CHECK_DIVERGENCE();
+
+	val = 0x0000040e;
+	bcm2835_sdhost_write(host, val, SDHCFG);
+
+	expected = 0x00010801;
+	val = bcm2835_sdhost_read(host, SDEDM);
+	CHECK_DIVERGENCE();
+
+	expected = 0x00000000;
+	val = bcm2835_sdhost_read(host, SDHSTS);
+	CHECK_DIVERGENCE();
+}
+
+static void replay_irq_reg_write(struct bcm2835_host *host) {
+	u32 val, expected, word, i, j;
+	int first = 0;
+	expected = 0x0000001;
+	val = bcm2835_sdhost_read(host, SDHSTS);
+	CHECK_DIVERGENCE();
+
+	val = 0x00000701;
+	bcm2835_sdhost_write(host, val, SDHSTS);
+
+	val = 0x0000050e;
+	bcm2835_sdhost_write(host, val, SDHCFG);
+
+	expected = 0x0001080a;
+	val = bcm2835_sdhost_read(host, SDEDM);
+	CHECK_DIVERGENCE();
+
+	word = 16;
+	i = 0;
+	while(i < 128/word) {
+		j = 0;
+		if (first) {
+			expected = 0x00010803;
+			val = bcm2835_sdhost_read(host, SDEDM);
+			CHECK_DIVERGENCE();
+		} else {
+			first = 1;
+		}
+		while (j < word) {
+			val = 0xdeadbeef;
+			bcm2835_sdhost_write(host, val, SDDATA);
+			printk("writing %08x\n...", val);
+			j++;
+		}
+		i++;
+	}
+	expected = 0x00000001;
+	val = bcm2835_sdhost_read(host, SDHSTS);
+	CHECK_DIVERGENCE();
+
+	expected = 0x00000001;
+	val = bcm2835_sdhost_read(host, SDHSTS);
+	CHECK_DIVERGENCE();
+
+	expected = 0x00000200;
+	val = bcm2835_sdhost_read(host, SDHSTS);
+	CHECK_DIVERGENCE();
+
+	val = 0x00000701;
+	bcm2835_sdhost_write(host, val, SDHSTS);
+
+	val = 0x0000040e;
+	bcm2835_sdhost_write(host, val, SDHCFG);
+
+	expected = 0x00010801;
+	val = bcm2835_sdhost_read(host, SDEDM);
+	CHECK_DIVERGENCE();
+
+	expected = 0x00000000;
+	val = bcm2835_sdhost_read(host, SDHSTS);
+	CHECK_DIVERGENCE();
+}
+
 static irqreturn_t bcm2835_sdhost_irq(int irq, void *dev_id)
 {
 	irqreturn_t result = IRQ_NONE;
 	struct bcm2835_host *host = dev_id;
 	u32 intmask;
+
+	if (in_replay) {
+		spin_lock(&host->lock);
+		/* write test */
+		replay_irq_reg_write(host);
+		spin_unlock(&host->lock);
+		in_replay = 0;
+		return IRQ_HANDLED;
+	}
 
 	spin_lock(&host->lock);
 
@@ -1785,8 +1904,8 @@ static void bcm2835_sdhost_set_ios(struct mmc_host *mmc, struct mmc_ios *ios)
 	struct bcm2835_host *host = mmc_priv(mmc);
 	unsigned long flags;
 
-	/*if (host->debug)*/
-	if (1)
+	if (host->debug)
+	/*if (1)*/
 		pr_info("%s: ios clock %d, pwr %d, bus_width %d, "
 			"timing %d, vdd %d, drv_type %d\n",
 			mmc_hostname(mmc),
@@ -2053,6 +2172,77 @@ untasklet:
 	return ret;
 }
 
+
+static int replay_read_single_block(struct bcm2835_host *host, u32 block, int rw) {
+	u32 expected, val;
+
+	expected = 0x00010801;
+	val= bcm2835_sdhost_read(host, SDEDM);
+	CHECK_DIVERGENCE();
+
+	expected = 0x0000000d;
+	val = bcm2835_sdhost_read(host, SDCMD);
+	CHECK_DIVERGENCE();
+
+	expected = 0x00000000;
+	val = bcm2835_sdhost_read(host, SDHSTS);
+	CHECK_DIVERGENCE();
+
+	val = 0x0000041e;
+	bcm2835_sdhost_write(host, val, SDHCFG);
+
+	val = 0x00000200;
+	bcm2835_sdhost_write(host, val, SDHBCT);
+
+	val = 0x00000001;
+	bcm2835_sdhost_write(host, val, SDHBLC);
+
+	val = 0x00000800;
+	bcm2835_sdhost_write(host, val, SDARG);
+
+	if (rw == 0) {
+		val = 0x00008051;
+		expected = 0x00008051;
+	} else {
+		val = 0x00008098;
+		expected = val;
+	}
+	bcm2835_sdhost_write(host, val, SDCMD);
+
+	val = bcm2835_sdhost_read(host, SDCMD);
+	CHECK_DIVERGENCE();
+
+	if (rw == 0) {
+		expected = 0x00000051;
+	} else {
+		expected = 0x00000098;
+	}
+	val = bcm2835_sdhost_read(host, SDCMD);
+	CHECK_DIVERGENCE();
+
+	expected = 0x00000900;
+	val = bcm2835_sdhost_read(host, SDRSP0);
+	CHECK_DIVERGENCE();
+
+	in_replay = 1;
+}
+
+static int mmc_replay_trigger(struct seq_file *s, void *unused) {
+	struct bcm2835_host *host = s->private;
+	replay_read_single_block(host, 0, 1);
+}
+
+static int mmc_replay_open(struct inode *inode, struct file *file) {
+	return single_open(file, mmc_replay_trigger, PDE_DATA(inode));
+}
+
+static const struct file_operations mmc_replay_ops = {
+	.open = mmc_replay_open,
+	.read = seq_read,
+	.llseek = seq_lseek,
+	.release  = single_release,
+};
+
 static int bcm2835_sdhost_probe(struct platform_device *pdev)
 {
 	trace_printk("probe start\n");
@@ -2190,6 +2380,12 @@ static int bcm2835_sdhost_probe(struct platform_device *pdev)
 
 	pr_debug("bcm2835_sdhost_probe -> OK\n");
 	trace_printk("probe end\n");
+
+	/* replay trigger */
+	proc_create_data("mmc_replay", 0, NULL, &mmc_replay_ops, host);
+	in_replay = 0;
+
+	printk("setting %p to procfs\n", host);
 
 	return 0;
 
