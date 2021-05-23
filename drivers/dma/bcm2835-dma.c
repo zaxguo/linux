@@ -51,6 +51,8 @@
 #define BCM2835_DMA_CHAN_NAME_SIZE 8
 #define BCM2835_DMA_BULK_MASK  BIT(0)
 
+#define STR(x) #x
+
 struct bcm2835_dmadev {
 	struct dma_device ddev;
 	spinlock_t lock;
@@ -180,6 +182,43 @@ struct bcm2835_desc {
 /* the max dma length for different channels */
 #define MAX_DMA_LEN SZ_1G
 #define MAX_LITE_DMA_LEN (SZ_64K - 4)
+
+static inline const char* get_reg_name(u32 reg) {
+	switch (reg)  {
+		case BCM2835_DMA_CS:
+			return STR(BCM2835_DMA_CS);
+		case BCM2835_DMA_ADDR:
+			return STR(BCM2835_DMA_ADDR);
+		case BCM2835_DMA_TI:
+			return STR(BCM2835_DMA_TI);
+		case BCM2835_DMA_SOURCE_AD:
+			return STR(BCM2835_DMA_SOURCE_AD);
+		case BCM2835_DMA_DEST_AD:
+			return STR(BCM2835_DMA_DEST_AD);
+		case BCM2835_DMA_LEN:
+			return STR(BCM2835_DMA_LEN);
+		case BCM2835_DMA_STRIDE:
+			return STR(BCM2835_DMA_STRIDE);
+		case BCM2835_DMA_NEXTCB:
+			return STR(BCM2835_DMA_NEXTCB);
+		case BCM2835_DMA_DEBUG:
+			return STR(BCM2835_DMA_DEBUG);
+		default:
+			return "unknown reg!";
+	}
+}
+
+static inline void dma_writel(u32 val, void *chan, u32 reg) {
+	trace_printk("write:%p:%s:%08x\n", chan, get_reg_name(reg), val);
+	writel(val, chan + reg);
+	return;
+}
+
+static inline u32 dma_readl(void *chan, u32 reg) {
+	u32 val = readl(chan + reg);
+	trace_printk("read:%p:%s:%08x\n", chan, get_reg_name(reg), val);
+	return val;
+}
 
 static inline size_t bcm2835_dma_max_frame_length(struct bcm2835_chan *c)
 {
@@ -422,17 +461,20 @@ static int bcm2835_dma_abort(void __iomem *chan_base)
 	unsigned long cs;
 	long int timeout = 10000;
 
-	cs = readl(chan_base + BCM2835_DMA_CS);
+	/*cs = readl(chan_base + BCM2835_DMA_CS);*/
+	cs = dma_readl(chan_base , BCM2835_DMA_CS);
 	if (!(cs & BCM2835_DMA_ACTIVE))
 		return 0;
 
 	/* Write 0 to the active bit - Pause the DMA */
-	writel(0, chan_base + BCM2835_DMA_CS);
+	/*writel(0, chan_base + BCM2835_DMA_CS);*/
+	dma_writel(0, chan_base, BCM2835_DMA_CS);
 
 	/* Wait for any current AXI transfer to complete */
 	while ((cs & BCM2835_DMA_ISPAUSED) && --timeout) {
 		cpu_relax();
-		cs = readl(chan_base + BCM2835_DMA_CS);
+		/*cs = readl(chan_base + BCM2835_DMA_CS);*/
+		cs = dma_readl(chan_base , BCM2835_DMA_CS);
 	}
 
 	/* We'll un-pause when we set of our next DMA */
@@ -443,11 +485,14 @@ static int bcm2835_dma_abort(void __iomem *chan_base)
 		return 0;
 
 	/* Terminate the control block chain */
-	writel(0, chan_base + BCM2835_DMA_NEXTCB);
+	/*writel(0, chan_base + BCM2835_DMA_NEXTCB);*/
+	dma_writel(0, chan_base, BCM2835_DMA_NEXTCB);
 
 	/* Abort the whole DMA */
-	writel(BCM2835_DMA_ABORT | BCM2835_DMA_ACTIVE,
-	       chan_base + BCM2835_DMA_CS);
+	/*writel(BCM2835_DMA_ABORT | BCM2835_DMA_ACTIVE,*/
+		   /*chan_base + BCM2835_DMA_CS);*/
+	dma_writel(BCM2835_DMA_ABORT | BCM2835_DMA_ACTIVE,
+	       chan_base , BCM2835_DMA_CS);
 
 	return 0;
 }
@@ -466,8 +511,10 @@ static void bcm2835_dma_start_desc(struct bcm2835_chan *c)
 
 	c->desc = d = to_bcm2835_dma_desc(&vd->tx);
 
-	writel(d->cb_list[0].paddr, c->chan_base + BCM2835_DMA_ADDR);
-	writel(BCM2835_DMA_ACTIVE, c->chan_base + BCM2835_DMA_CS);
+	/*writel(d->cb_list[0].paddr, c->chan_base + BCM2835_DMA_ADDR);*/
+	dma_writel(d->cb_list[0].paddr, c->chan_base , BCM2835_DMA_ADDR);
+	/*writel(BCM2835_DMA_ACTIVE, c->chan_base + BCM2835_DMA_CS);*/
+	dma_writel(BCM2835_DMA_ACTIVE, c->chan_base , BCM2835_DMA_CS);
 }
 
 static irqreturn_t bcm2835_dma_callback(int irq, void *data)
@@ -479,7 +526,8 @@ static irqreturn_t bcm2835_dma_callback(int irq, void *data)
 	/* check the shared interrupt */
 	if (c->irq_flags & IRQF_SHARED) {
 		/* check if the interrupt is enabled */
-		flags = readl(c->chan_base + BCM2835_DMA_CS);
+		/*flags = readl(c->chan_base + BCM2835_DMA_CS);*/
+		flags = dma_readl(c->chan_base , BCM2835_DMA_CS);
 		/* if not set then we are not the reason for the irq */
 		if (!(flags & BCM2835_DMA_INT))
 			return IRQ_NONE;
@@ -488,7 +536,8 @@ static irqreturn_t bcm2835_dma_callback(int irq, void *data)
 	spin_lock_irqsave(&c->vc.lock, flags);
 
 	/* Acknowledge interrupt */
-	writel(BCM2835_DMA_INT, c->chan_base + BCM2835_DMA_CS);
+	/*writel(BCM2835_DMA_INT, c->chan_base + BCM2835_DMA_CS);*/
+	dma_writel(BCM2835_DMA_INT, c->chan_base , BCM2835_DMA_CS);
 
 	d = c->desc;
 
@@ -498,8 +547,11 @@ static irqreturn_t bcm2835_dma_callback(int irq, void *data)
 			vchan_cyclic_callback(&d->vd);
 
 			/* Keep the DMA engine running */
-			writel(BCM2835_DMA_ACTIVE,
-			       c->chan_base + BCM2835_DMA_CS);
+			/*writel(BCM2835_DMA_ACTIVE,*/
+				   /*c->chan_base + BCM2835_DMA_CS);*/
+			dma_writel(BCM2835_DMA_ACTIVE,
+							   c->chan_base , BCM2835_DMA_CS);
+
 		} else {
 			vchan_cookie_complete(&c->desc->vd);
 			bcm2835_dma_start_desc(c);
@@ -591,9 +643,11 @@ static enum dma_status bcm2835_dma_tx_status(struct dma_chan *chan,
 		dma_addr_t pos;
 
 		if (d->dir == DMA_MEM_TO_DEV)
-			pos = readl(c->chan_base + BCM2835_DMA_SOURCE_AD);
+			/*pos = readl(c->chan_base + BCM2835_DMA_SOURCE_AD);*/
+			pos = dma_readl(c->chan_base , BCM2835_DMA_SOURCE_AD);
 		else if (d->dir == DMA_DEV_TO_MEM)
-			pos = readl(c->chan_base + BCM2835_DMA_DEST_AD);
+			/*pos = readl(c->chan_base + BCM2835_DMA_DEST_AD);*/
+			pos = dma_readl(c->chan_base , BCM2835_DMA_DEST_AD);
 		else
 			pos = 0;
 
@@ -820,7 +874,8 @@ static int bcm2835_dma_terminate_all(struct dma_chan *chan)
 
 		/* Wait for stopping */
 		while (--timeout) {
-			if (!(readl(c->chan_base + BCM2835_DMA_CS) &
+			/*if (!(readl(c->chan_base + BCM2835_DMA_CS) &*/
+			if (!(dma_readl(c->chan_base , BCM2835_DMA_CS) &
 						BCM2835_DMA_ACTIVE))
 				break;
 
@@ -857,7 +912,8 @@ static int bcm2835_dma_chan_init(struct bcm2835_dmadev *d, int chan_id,
 	c->irq_flags = irq_flags;
 
 	/* check in DEBUG register if this is a LITE channel */
-	if (readl(c->chan_base + BCM2835_DMA_DEBUG) &
+	/*if (readl(c->chan_base + BCM2835_DMA_DEBUG) &*/
+	if (dma_readl(c->chan_base , BCM2835_DMA_DEBUG) &
 		BCM2835_DMA_DEBUG_LITE)
 		c->is_lite_channel = true;
 
