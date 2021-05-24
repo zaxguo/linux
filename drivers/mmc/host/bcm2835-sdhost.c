@@ -152,7 +152,11 @@
 #define MHZ 1000000
 
 
-static int in_replay;
+int in_replay;
+EXPORT_SYMBOL(in_replay);
+
+uint32_t *dma_data, *dma_data2, *dma_data3, *dma_data4;
+
 
 struct bcm2835_host {
 	spinlock_t		lock;
@@ -229,6 +233,8 @@ struct bcm2835_host {
 
 	u32				sectors;	/* Cached card size in sectors */
 };
+
+static struct bcm2835_host *my_host;
 
 #if ENABLE_LOG
 
@@ -1626,12 +1632,15 @@ static irqreturn_t bcm2835_sdhost_irq(int irq, void *dev_id)
 	struct bcm2835_host *host = dev_id;
 	u32 intmask;
 
+	trace_printk("entered\n");
+
 	if (in_replay) {
 		spin_lock(&host->lock);
 		/* write test */
-		replay_irq_reg_write(host);
+		/*replay_irq_reg_write(host);*/
+		/*replay_dma_irq_callback();*/
 		spin_unlock(&host->lock);
-		in_replay = 0;
+		/*in_replay = 0;*/
 		return IRQ_HANDLED;
 	}
 
@@ -2173,6 +2182,221 @@ untasklet:
 }
 
 
+/* userspace cmd: dd if=/dev/mmcblk0p1 of=/tmp/test bs=512 count=2 */
+extern void replay_dma(struct dma_chan *chan, dma_addr_t cb);
+
+void replay_dma_irq_callback(void) {
+	struct bcm2835_host *host = my_host;
+	u32 val, expected;
+	expected = 0x1;
+	val = bcm2835_sdhost_read(host, SDHSTS);
+	CHECK_DIVERGENCE();
+
+	expected = 0x52;
+	val = bcm2835_sdhost_read(host, SDCMD);
+	CHECK_DIVERGENCE();
+
+
+	expected = 0x00010834;
+	val = bcm2835_sdhost_read(host, SDEDM);
+	CHECK_DIVERGENCE();
+
+	expected = 0x00010834;
+	val = bcm2835_sdhost_read(host, SDEDM);
+	CHECK_DIVERGENCE();
+
+	expected = 0x0;
+	val = bcm2835_sdhost_read(host, SDDATA);
+	CHECK_DIVERGENCE();
+
+	expected = 0x00010824;
+	val = bcm2835_sdhost_read(host, SDEDM);
+	CHECK_DIVERGENCE();
+
+	expected = 0x0;
+	val = bcm2835_sdhost_read(host, SDDATA);
+	CHECK_DIVERGENCE();
+
+	expected = 0x00010814;
+	val = bcm2835_sdhost_read(host, SDEDM);
+	CHECK_DIVERGENCE();
+
+	expected = 0x0;
+	val = bcm2835_sdhost_read(host, SDDATA);
+	CHECK_DIVERGENCE();
+
+	val = 0x40e;
+	bcm2835_sdhost_write(host, val, SDHCFG);
+
+	expected = 0x00010804;
+	val = bcm2835_sdhost_read(host, SDEDM);
+	CHECK_DIVERGENCE();
+
+	val = 0x00090804;
+	bcm2835_sdhost_write(host, val, SDEDM);
+
+	in_replay = 0;
+	trace_printk("replay done!\n");
+
+	printk("%08x %08x %08x %08x\n", *dma_data, *(dma_data + 1), *(dma_data + 2), *(dma_data + 3));
+	printk("%08x %08x %08x %08x\n", *dma_data2, *(dma_data2 + 1), *(dma_data2 + 2), *(dma_data2 + 3));
+	printk("%08x %08x %08x %08x\n", *dma_data3, *(dma_data3 + 1), *(dma_data3 + 2), *(dma_data3 + 3));
+	printk("%08x %08x %08x %08x\n", *dma_data4, *(dma_data4 + 1), *(dma_data4 + 2), *(dma_data4 + 3));
+
+
+}
+EXPORT_SYMBOL(replay_dma_irq_callback);
+
+static void replay_dma_read(struct bcm2835_host *host) {
+	u32 expected, val;
+	
+	expected = 0x00010801;
+	val = bcm2835_sdhost_read(host, SDEDM);
+	CHECK_DIVERGENCE();
+
+	expected = 0xd;
+	val = bcm2835_sdhost_read(host, SDCMD);
+
+	expected = 0x0;
+	val = bcm2835_sdhost_read(host, SDHSTS);
+
+	val = 0x20;
+	bcm2835_sdhost_write(host, val, SDARG);
+
+	val = 0x8017;
+	bcm2835_sdhost_write(host, val, SDCMD);
+
+	expected = 0x8017;
+	val = bcm2835_sdhost_read(host, SDCMD);
+	CHECK_DIVERGENCE();
+
+	val = bcm2835_sdhost_read(host, SDCMD);
+	CHECK_DIVERGENCE();
+
+	expected = 0x900;
+	val = bcm2835_sdhost_read(host, SDRSP0);
+	CHECK_DIVERGENCE();
+
+	expected = 0x17;
+	val = bcm2835_sdhost_read(host, SDCMD);
+	CHECK_DIVERGENCE();
+
+	expected = 0x0;
+	val = bcm2835_sdhost_read(host, SDHSTS);
+	CHECK_DIVERGENCE();
+
+	val = 0x40e;
+	bcm2835_sdhost_write(host, val, SDHCFG);
+
+	val = 0x200;
+	bcm2835_sdhost_write(host, val, SDHBCT);
+
+	val = 0x20;
+	bcm2835_sdhost_write(host, val, SDHBLC);
+
+	val = 0x800;
+	bcm2835_sdhost_write(host, val, SDARG);
+
+	val = 0x8052;
+	bcm2835_sdhost_write(host, val, SDCMD);
+
+	/* prepare DMA cb */
+	dma_addr_t replay_cb, replay_cb2, replay_cb3, replay_cb4, data_dst, data_dst2, data_dst3, data_dst4;
+	/* ugly */
+	uint32_t *cb_virt, *cb_virt2, *cb_virt3, *cb_virt4;
+	uint32_t *data, *data2, *data3, *data4;
+	cb_virt = dma_zalloc_coherent(host->mmc->parent, 8, &replay_cb, GFP_KERNEL);
+	cb_virt2 = dma_zalloc_coherent(host->mmc->parent, 8, &replay_cb2, GFP_KERNEL);
+	cb_virt3 = dma_zalloc_coherent(host->mmc->parent, 8, &replay_cb3, GFP_KERNEL);
+	cb_virt4 = dma_zalloc_coherent(host->mmc->parent, 8, &replay_cb4, GFP_KERNEL);
+	if (!cb_virt) {
+		printk("fail to alloc dma mem for cb!\n");
+		return;
+	}
+	data = dma_zalloc_coherent(host->mmc->parent, 4096, &data_dst, GFP_KERNEL);
+	data2 = dma_zalloc_coherent(host->mmc->parent, 4096, &data_dst2, GFP_KERNEL);
+	data3 = dma_zalloc_coherent(host->mmc->parent, 4096, &data_dst3, GFP_KERNEL);
+	data4 = dma_zalloc_coherent(host->mmc->parent, 4096, &data_dst4, GFP_KERNEL);
+	dma_data = data;
+	dma_data2 = data2;
+	dma_data3 = data3;
+	dma_data4 = data4;
+	if (!data) {
+		printk("fail to alloc dma mem for data!\n");
+		return;
+	}
+	*cb_virt = 0x000d0418;
+	/* read, src = host addr + SDDATA*/
+	*(cb_virt+1) = 0x7e202040;
+	/* dest data addr in mem */
+	*(cb_virt+2) = data_dst;
+	/* 4KB min tx unit */
+	*(cb_virt + 3) = 0x1000;
+	/* stride = 0 */
+	*(cb_virt + 4) = 0;
+	/* next cb... why needed??? */
+	*(cb_virt + 5) = replay_cb2;
+
+	*cb_virt2 = 0x000d0418;
+	/* read, src = host addr + SDDATA*/
+	*(cb_virt2+1) = 0x7e202040;
+	/* dest data addr in mem */
+	*(cb_virt2+2) = data_dst2;
+	/* 4KB min tx unit */
+	*(cb_virt2 + 3) = 0x1000;
+	/* stride = 0 */
+	*(cb_virt2 + 4) = 0;
+	/* next cb... ??? */
+	*(cb_virt2 + 5) = replay_cb3;
+
+	*cb_virt3 = 0x000d0418;
+	/* read, src = host addr + SDDATA*/
+	*(cb_virt3+1) = 0x7e202040;
+	/* dest data addr in mem */
+	*(cb_virt3+2) = data_dst3;
+	/* 4KB min tx unit */
+	*(cb_virt3 + 3) = 0x1000;
+	/* stride = 0 */
+	*(cb_virt3 + 4) = 0;
+	/* next cb... ??? */
+	*(cb_virt3 + 5) = replay_cb4;
+
+	*cb_virt4 = 0x000d0419;
+	/* read, src = host addr + SDDATA*/
+	*(cb_virt4+1) = 0x7e202040;
+	/* dest data addr in mem */
+	*(cb_virt4+2) = data_dst4;
+	/* 4KB min tx unit */
+	*(cb_virt4 + 3) = 0x0ff4;
+	/* stride = 0 */
+	*(cb_virt4 + 4) = 0;
+	/* next cb... ??? */
+	*(cb_virt4 + 5) = 0;
+
+
+	trace_printk("cb: %08x %08x %08x %08x %08x %08x %08x %08x\n",
+			*cb_virt , *(cb_virt + 1), *(cb_virt + 2), *(cb_virt + 3), *(cb_virt + 4), *(cb_virt + 5), *(cb_virt + 6), *(cb_virt + 7));
+
+	if (host->dma_chan_rxtx) {
+		replay_dma(host->dma_chan_rxtx, replay_cb);
+	}
+	else {
+		printk("no dma chan...abort..\n");
+		return;
+	}
+
+	/* finish command */
+	expected = 0x52;
+	val = bcm2835_sdhost_read(host, SDCMD);
+	CHECK_DIVERGENCE();
+
+	expected = 0x900;
+	val = bcm2835_sdhost_read(host, SDRSP0);
+	CHECK_DIVERGENCE();
+
+	in_replay = 1;
+}
+
 static int replay_read_single_block(struct bcm2835_host *host, u32 block, int rw) {
 	u32 expected, val;
 
@@ -2229,7 +2453,8 @@ static int replay_read_single_block(struct bcm2835_host *host, u32 block, int rw
 
 static int mmc_replay_trigger(struct seq_file *s, void *unused) {
 	struct bcm2835_host *host = s->private;
-	replay_read_single_block(host, 0, 1);
+	/*replay_read_single_block(host, 0, 1);*/
+	replay_dma_read(host);
 }
 
 static int mmc_replay_open(struct inode *inode, struct file *file) {
@@ -2385,6 +2610,7 @@ static int bcm2835_sdhost_probe(struct platform_device *pdev)
 	proc_create_data("mmc_replay", 0, NULL, &mmc_replay_ops, host);
 	in_replay = 0;
 
+	my_host = host;
 	printk("setting %p to procfs\n", host);
 
 	return 0;

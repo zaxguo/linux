@@ -52,6 +52,7 @@
 #define BCM2835_DMA_BULK_MASK  BIT(0)
 
 #define STR(x) #x
+extern int in_replay;
 
 struct bcm2835_dmadev {
 	struct dma_device ddev;
@@ -456,6 +457,18 @@ static void bcm2835_dma_fill_cb_chain_with_sg(
 	}
 }
 
+void replay_dma(struct dma_chan *chan, dma_addr_t cb) {
+	struct bcm2835_chan *c = to_bcm2835_dma_chan(chan);
+	/* cb paddr write into DMA controller */
+	printk("writing %08x to %p..\n", cb, c);
+	dma_writel(cb, c->chan_base, BCM2835_DMA_ADDR);
+	dma_readl(c->chan_base, BCM2835_DMA_ADDR);
+	/* set active bit */
+	dma_writel(0x1, c->chan_base, BCM2835_DMA_CS);
+	dma_readl(c->chan_base, BCM2835_DMA_CS);
+}
+EXPORT_SYMBOL(replay_dma);
+
 static int bcm2835_dma_abort(void __iomem *chan_base)
 {
 	unsigned long cs;
@@ -501,6 +514,7 @@ static void bcm2835_dma_start_desc(struct bcm2835_chan *c)
 {
 	struct virt_dma_desc *vd = vchan_next_desc(&c->vc);
 	struct bcm2835_desc *d;
+	int i;
 
 	if (!vd) {
 		c->desc = NULL;
@@ -512,9 +526,24 @@ static void bcm2835_dma_start_desc(struct bcm2835_chan *c)
 	c->desc = d = to_bcm2835_dma_desc(&vd->tx);
 
 	/*writel(d->cb_list[0].paddr, c->chan_base + BCM2835_DMA_ADDR);*/
+	/* lwg: the 8-word control block paddr */
+	/*struct bcm2835_dma_cb *cb = d->cb_list[0].cb;*/
+	for (i = 0; i < d->frames; i++) {
+		uint32_t *cb = (uint32_t *)d->cb_list[i].cb;
+		trace_printk("cb[%08x]: %08x %08x %08x %08x %08x %08x %08x %08x\n",
+				d->cb_list[i].paddr, *cb , *(cb + 1), *(cb + 2), *(cb + 3), *(cb + 4), *(cb + 5), *(cb + 6), *(cb + 7));
+	}
 	dma_writel(d->cb_list[0].paddr, c->chan_base , BCM2835_DMA_ADDR);
 	/*writel(BCM2835_DMA_ACTIVE, c->chan_base + BCM2835_DMA_CS);*/
 	dma_writel(BCM2835_DMA_ACTIVE, c->chan_base , BCM2835_DMA_CS);
+	dma_readl(c->chan_base , BCM2835_DMA_CS);
+}
+
+extern void replay_dma_irq_callback(void);
+static void replay_dma_irq(struct bcm2835_chan *c) {
+	u32 val, expected;
+	val = 0x4;
+	dma_writel(val, c->chan_base, BCM2835_DMA_CS);
 }
 
 static irqreturn_t bcm2835_dma_callback(int irq, void *data)
@@ -522,6 +551,17 @@ static irqreturn_t bcm2835_dma_callback(int irq, void *data)
 	struct bcm2835_chan *c = data;
 	struct bcm2835_desc *d;
 	unsigned long flags;
+	trace_printk("entered\n");
+
+	if (in_replay) {
+		printk("catch our irq!!\n");
+		spin_lock_irqsave(&c->vc.lock, flags);
+		replay_dma_irq(data);
+		replay_dma_irq_callback();
+		spin_unlock_irqrestore(&c->vc.lock, flags);
+		in_replay = 0;
+		return IRQ_HANDLED;
+	}
 
 	/* check the shared interrupt */
 	if (c->irq_flags & IRQF_SHARED) {
