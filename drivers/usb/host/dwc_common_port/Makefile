@@ -5,8 +5,8 @@
 ifneq ($(KERNELRELEASE),)
 
 ccflags-y	+= -DDWC_LINUX
-#ccflags-y	+= -DDEBUG
-#ccflags-y	+= -DDWC_DEBUG_REGS
+ccflags-y	+= -DDEBUG
+ccflags-y	+= -DDWC_DEBUG_REGS
 #ccflags-y	+= -DDWC_DEBUG_MEMORY
 
 ccflags-y	+= -DDWC_LIBMODULE

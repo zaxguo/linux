@@ -55,6 +55,9 @@
 #include <linux/highmem.h>
 #include <soc/bcm2835/raspberrypi-firmware.h>
 #include <linux/proc_fs.h>
+#include <linux/arm-smccc.h>
+#include "../../tee/optee/optee_smc.h"
+#include "../../block/enigma/enigma_smc.h"
 
 /* For mmc_card_blockaddr */
 #include "../core/card.h"
@@ -366,14 +369,14 @@ static const char* get_reg_name(int reg) {
 
 static inline void bcm2835_sdhost_write(struct bcm2835_host *host, u32 val, int reg)
 {
-	trace_printk("write:%s:%08x\n", get_reg_name(reg), val);
+	/*trace_printk("write:%s:%08x\n", get_reg_name(reg), val);*/
 	writel(val, host->ioaddr + reg);
 }
 
 static inline u32 bcm2835_sdhost_read(struct bcm2835_host *host, int reg)
 {
 	u32 val = readl(host->ioaddr + reg);
-	trace_printk("read:%s:%08x\n", get_reg_name(reg), val);
+	/*trace_printk("read:%s:%08x\n", get_reg_name(reg), val);*/
 	return val;
 }
 
@@ -1525,6 +1528,7 @@ static void bcm2835_sdhost_block_irq(struct bcm2835_host *host, u32 intmask)
 }
 
 static void replay_irq_reg(struct bcm2835_host *host) {
+	dump_stack();
 	u32 val, expected, word, i, j;
 	expected = 0x0000001;
 	val = bcm2835_sdhost_read(host, SDHSTS);
@@ -1542,7 +1546,7 @@ static void replay_irq_reg(struct bcm2835_host *host) {
 		CHECK_DIVERGENCE();
 		while (j < word) {
 			val = bcm2835_sdhost_read(host, SDDATA);
-			printk("reading %08x\n...", val);
+			printk("reading %08x...\n", val);
 			j++;
 		}
 		i++;
@@ -1626,21 +1630,40 @@ static void replay_irq_reg_write(struct bcm2835_host *host) {
 	CHECK_DIVERGENCE();
 }
 
+extern void __iomem *arm_local_intc;
+extern void *peripheral_intc;
+
+static void dump_intr_controller(void) {
+	u32 val,cpu;
+	cpu = smp_processor_id();
+	val = readl(arm_local_intc + 0xc + 4*cpu);
+	printk("val = %08x\n", val);
+
+	val = readl(peripheral_intc);
+	printk("pend 0 = %08x\n", val);
+	val = readl(peripheral_intc + 0x4);
+	printk("pend 1 = %08x\n", val);
+	val = readl(peripheral_intc + 0x8);
+	printk("pend 2 = %08x\n", val);
+
+}
+
+
 static irqreturn_t bcm2835_sdhost_irq(int irq, void *dev_id)
 {
 	irqreturn_t result = IRQ_NONE;
 	struct bcm2835_host *host = dev_id;
 	u32 intmask;
-
-	trace_printk("entered\n");
-
+	trace_printk("entered, irq = %d\n", irq);
 	if (in_replay) {
 		spin_lock(&host->lock);
+		dump_intr_controller();
+		/* read test */
+		replay_irq_reg(host);
 		/* write test */
 		/*replay_irq_reg_write(host);*/
-		/*replay_dma_irq_callback();*/
 		spin_unlock(&host->lock);
-		/*in_replay = 0;*/
+		in_replay = 0;
 		return IRQ_HANDLED;
 	}
 
@@ -2249,7 +2272,7 @@ EXPORT_SYMBOL(replay_dma_irq_callback);
 
 static void replay_dma_read(struct bcm2835_host *host) {
 	u32 expected, val;
-	
+
 	expected = 0x00010801;
 	val = bcm2835_sdhost_read(host, SDEDM);
 	CHECK_DIVERGENCE();
@@ -2400,6 +2423,7 @@ static void replay_dma_read(struct bcm2835_host *host) {
 static int replay_read_single_block(struct bcm2835_host *host, u32 block, int rw) {
 	u32 expected, val;
 
+
 	expected = 0x00010801;
 	val= bcm2835_sdhost_read(host, SDEDM);
 	CHECK_DIVERGENCE();
@@ -2437,9 +2461,9 @@ static int replay_read_single_block(struct bcm2835_host *host, u32 block, int rw
 	CHECK_DIVERGENCE();
 
 	if (rw == 0) {
-		expected = 0x00000051;
+		expected = 0x00008051;
 	} else {
-		expected = 0x00000098;
+		expected = 0x00008098;
 	}
 	val = bcm2835_sdhost_read(host, SDCMD);
 	CHECK_DIVERGENCE();
@@ -2447,14 +2471,24 @@ static int replay_read_single_block(struct bcm2835_host *host, u32 block, int rw
 	expected = 0x00000900;
 	val = bcm2835_sdhost_read(host, SDRSP0);
 	CHECK_DIVERGENCE();
-
 	in_replay = 1;
+}
+
+static void replay_tee(struct bcm2835_host *host) {
+	struct arm_smccc_res res;
+	/* test reading EDM reg */
+	u32 val = bcm2835_sdhost_read(host, SDEDM);
+	printk("SDEDM = %08x\n", val);
+	arm_smccc_smc(ENIGMA_FAST_CALL, ENIGMA_LOOKUP_BTT, 0, 0, 0, 0, 0, 0, &res);
+	/*arm_smccc_smc(ENIGMA_SMC_CALL, ENIGMA_LOOKUP_BTT, 0, 0, 0, 0, 0, 0, &res);*/
+	return;
 }
 
 static int mmc_replay_trigger(struct seq_file *s, void *unused) {
 	struct bcm2835_host *host = s->private;
-	/*replay_read_single_block(host, 0, 1);*/
-	replay_dma_read(host);
+	/*replay_read_single_block(host, 0, 0);*/
+	/*replay_dma_read(host);*/
+	replay_tee(host);
 }
 
 static int mmc_replay_open(struct inode *inode, struct file *file) {
@@ -2575,7 +2609,7 @@ static int bcm2835_sdhost_probe(struct platform_device *pdev)
 		ret = -EINVAL;
 		goto err;
 	}
-
+	printk("lwg:%s:%d:irq = %d\n", __func__, __LINE__, host->irq);
 	pr_debug(" - max_clk %lx, irq %d\n",
 		 (unsigned long)host->max_clk,
 		 (int)host->irq);

@@ -165,8 +165,15 @@ static void armctrl_unmask_irq(struct irq_data *d)
 #ifdef CONFIG_ARM64
 void bcm2836_arm_irqchip_spin_gpu_irq(void);
 
+void *peripheral_intc;
+EXPORT_SYMBOL(peripheral_intc);
+
+extern int in_replay;
 static void armctrl_ack_irq(struct irq_data *d)
 {
+	/*if (in_replay) {*/
+		/*printk("lwg:%s:%d:ack...\n", __func__, __LINE__);*/
+	/*}*/
 	bcm2836_arm_irqchip_spin_gpu_irq();
 }
 
@@ -218,6 +225,9 @@ static int __init armctrl_of_init(struct device_node *node,
 		panic("%pOF: unable to map IC registers\n", node);
 
 	intc.base = base;
+
+	peripheral_intc = base;
+
 	intc.domain = irq_domain_add_linear(node, NUMBER_IRQS * 2,
 					    &armctrl_ops, NULL);
 	if (!intc.domain)
@@ -304,24 +314,38 @@ static u32 armctrl_translate_shortcut(int bank, u32 stat)
 	return MAKE_HWIRQ(bank, shortcuts[ffs(stat >> SHORTCUT_SHIFT) - 1]);
 }
 
+extern int in_replay;
+
 static u32 get_next_armctrl_hwirq(void)
 {
-	u32 stat = readl_relaxed(intc.pending[0]) & BANK0_VALID_MASK;
+	u32 _stat = readl_relaxed(intc.pending[0]);
+    u32 stat = _stat & BANK0_VALID_MASK;
+	u32 hwirq;
 
 	if (stat == 0)
-		return ~0;
+		/*return ~0;*/
+		hwirq = ~0;
 	else if (stat & BANK0_HWIRQ_MASK)
-		return MAKE_HWIRQ(0, ffs(stat & BANK0_HWIRQ_MASK) - 1);
+		/*return MAKE_HWIRQ(0, ffs(stat & BANK0_HWIRQ_MASK) - 1);*/
+		hwirq = MAKE_HWIRQ(0, ffs(stat & BANK0_HWIRQ_MASK) - 1);
 	else if (stat & SHORTCUT1_MASK)
-		return armctrl_translate_shortcut(1, stat & SHORTCUT1_MASK);
+		/*return armctrl_translate_shortcut(1, stat & SHORTCUT1_MASK);*/
+		hwirq = armctrl_translate_shortcut(1, stat & SHORTCUT1_MASK);
 	else if (stat & SHORTCUT2_MASK)
-		return armctrl_translate_shortcut(2, stat & SHORTCUT2_MASK);
+		/*return armctrl_translate_shortcut(2, stat & SHORTCUT2_MASK);*/
+		hwirq = armctrl_translate_shortcut(2, stat & SHORTCUT2_MASK);
 	else if (stat & BANK1_HWIRQ)
-		return armctrl_translate_bank(1);
+		/*return armctrl_translate_bank(1);*/
+		hwirq = armctrl_translate_bank(1);
 	else if (stat & BANK2_HWIRQ)
-		return armctrl_translate_bank(2);
+		/*return armctrl_translate_bank(2);*/
+		hwirq = armctrl_translate_bank(2);
 	else
 		BUG();
+	if (hwirq == 71) {
+			printk("stat = %08x, pending0 = %08x\n", stat, _stat);
+	}
+	return hwirq;
 }
 
 static void __exception_irq_entry bcm2835_handle_irq(

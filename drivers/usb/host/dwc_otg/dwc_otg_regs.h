@@ -35,6 +35,15 @@
 #define __DWC_OTG_REGS_H__
 
 #include "dwc_otg_core_if.h"
+/* lwg: our annotated */
+extern uint32_t _DWC_READ_REG32(const char *str, uint32_t volatile *reg);
+#define DWC_READ_REG32(a) _DWC_READ_REG32(#a, a)
+
+extern void _DWC_WRITE_REG32(const char *str, uint32_t volatile *reg, uint32_t val);
+#define DWC_WRITE_REG32(reg, val) _DWC_WRITE_REG32(#reg, reg, val)
+
+extern void _DWC_MODIFY_REG32(const char *str, uint32_t volatile *reg, uint32_t clear_mask, uint32_t set_mask);
+#define DWC_MODIFY_REG32(reg, clear, set) _DWC_MODIFY_REG32(#reg, reg, clear, set)
 
 /**
  * @file

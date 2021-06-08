@@ -540,11 +540,26 @@ uint16_t DWC_BE16_TO_CPU(uint16_t *p)
 
 
 /* Registers */
-
+extern void log_reg_rw(int rw, const char *str, uint32_t value);
 uint32_t DWC_READ_REG32(uint32_t volatile *reg)
 {
-	return readl(reg);
+	uint32_t value = readl(reg);
+	return value;
 }
+
+uint32_t _DWC_READ_REG32(const char *str, uint32_t volatile *reg) {
+	uint32_t value = readl(reg);
+	log_reg_rw(0, str, value);
+	return value;
+}
+EXPORT_SYMBOL(_DWC_READ_REG32);
+
+void _DWC_WRITE_REG32(const char *str, uint32_t volatile *reg, uint32_t value) {
+	log_reg_rw(1, str, value);
+	writel(value, reg);
+}
+EXPORT_SYMBOL(_DWC_WRITE_REG32);
+
 
 #if 0
 uint64_t DWC_READ_REG64(uint64_t volatile *reg)
@@ -565,8 +580,24 @@ void DWC_WRITE_REG64(uint64_t volatile *reg, uint64_t value)
 
 void DWC_MODIFY_REG32(uint32_t volatile *reg, uint32_t clear_mask, uint32_t set_mask)
 {
-	writel((readl(reg) & ~clear_mask) | set_mask, reg);
+	uint32_t value = readl(reg);
+	value &= ~clear_mask;
+	value |= set_mask;
+	/*writel((readl(reg) & ~clear_mask) | set_mask, reg);*/
+	writel(value, reg);
 }
+
+void _DWC_MODIFY_REG32(const char *s, uint32_t volatile *reg, uint32_t clear_mask, uint32_t set_mask) {
+	uint32_t value = readl(reg);
+	log_reg_rw(0, s, value);
+	value &= ~clear_mask;
+	value |= set_mask;
+	log_reg_rw(1, s, value);
+	writel(value, reg);
+}
+EXPORT_SYMBOL(_DWC_MODIFY_REG32);
+
+
 
 #if 0
 void DWC_MODIFY_REG64(uint64_t volatile *reg, uint64_t clear_mask, uint64_t set_mask)

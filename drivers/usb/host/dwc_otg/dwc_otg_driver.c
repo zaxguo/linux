@@ -566,6 +566,9 @@ static irqreturn_t dwc_otg_common_irq(int irq, void *dev)
 {
 	int32_t retval = IRQ_NONE;
 
+	/* lwg: all irq entry point */
+	/* irq == 41 */
+	/*printk("irq = %d\n", irq);*/
 	retval = dwc_otg_handle_common_intr(dev);
 	if (retval != 0) {
 		S3C2410X_CLEAR_EINTPEND();

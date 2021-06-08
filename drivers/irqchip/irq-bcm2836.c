@@ -97,15 +97,19 @@ static void bcm2836_arm_irqchip_unmask_gpu_irq(struct irq_data *d)
 
 #ifdef CONFIG_ARM64
 
+extern int in_replay;
 void bcm2836_arm_irqchip_spin_gpu_irq(void)
 {
 	u32 i;
 	void __iomem *gpurouting = (intc.base + LOCAL_GPU_ROUTING);
 	u32 routing_val = readl(gpurouting);
 
+
 	for (i = 1; i <= 3; i++) {
 		u32 new_routing_val = (routing_val + i) & 3;
-
+		/*if (in_replay) {*/
+			/*printk("routing val = %08x, new = %08x\n", routing_val, new_routing_val);*/
+		/*}*/
 		if (cpu_active(new_routing_val)) {
 			writel(new_routing_val, gpurouting);
 			return;
@@ -131,6 +135,8 @@ static void bcm2836_arm_irqchip_register_irq(int hwirq, struct irq_chip *chip)
 	irq_set_status_flags(irq, IRQ_NOAUTOEN | IRQ_TYPE_LEVEL_LOW);
 }
 
+extern int in_replay;
+
 static void
 __exception_irq_entry bcm2836_arm_irqchip_handle_irq(struct pt_regs *regs)
 {
@@ -151,7 +157,9 @@ __exception_irq_entry bcm2836_arm_irqchip_handle_irq(struct pt_regs *regs)
 #endif
 	} else if (stat) {
 		u32 hwirq = ffs(stat) - 1;
-
+		/*if (in_replay) {*/
+			/*printk("lwg:%s:%d:stat = %08x\n", __func__, __LINE__, stat);*/
+		/*}*/
 		handle_domain_irq(intc.domain, hwirq, regs);
 	}
 }
@@ -230,10 +238,13 @@ static void bcm2835_init_local_timer_frequency(void)
 static int __init bcm2836_arm_irqchip_l1_intc_of_init(struct device_node *node,
 						      struct device_node *parent)
 {
+	struct resource res;
+	of_address_to_resource(node, 0, &res);
 	intc.base = of_iomap(node, 0);
 	if (!intc.base) {
 		panic("%pOF: unable to map local interrupt registers\n", node);
 	}
+	printk("lwg:%s:%d:start = %08x, virt = %p\n", __func__, __LINE__, res.start, intc.base);
 
 	arm_local_intc = intc.base;
 

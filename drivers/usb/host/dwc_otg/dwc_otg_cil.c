@@ -63,6 +63,64 @@
 
 extern bool cil_force_host;
 
+/*extern uint32_t _DWC_READ_REG32(const char *str, uint32_t volatile *reg);*/
+/*extern uint32_t _DWC_WRITE_REG32(const char *str, uint32_t volatile *reg, uint32_t value);*/
+
+
+/* lwg: used to determine base addr */
+dwc_otg_core_if_t *usb_core;
+void *banks[6];
+int sizes[6];
+const char *names[] = {
+	"CORE_GLOBAL",
+	"DEVICE_GLOBAL",
+	"IN_EP",
+	"OUT_EP",
+	"HOST_GLOBAL",
+	"OTG_HC"
+};
+static int bank_count;
+
+
+static void init_regmap(void) {
+	dwc_otg_core_if_t *base = usb_core;
+	bank_count = 0;
+	/* 6 banks */
+	dwc_otg_core_global_regs_t *core_global =  base->core_global_regs;
+	banks[bank_count] = core_global;
+	sizes[bank_count] = sizeof(dwc_otg_core_global_regs_t);
+	bank_count++;
+	dwc_otg_device_global_regs_t *dev_global = base->dev_if->dev_global_regs;
+	banks[bank_count] = dev_global;
+	sizes[bank_count] = sizeof(dwc_otg_device_global_regs_t);
+	bank_count++;
+
+	dwc_otg_dev_in_ep_regs_t *in_ep = base->dev_if->in_ep_regs[0];
+	banks[bank_count] = in_ep;
+	sizes[bank_count] = sizeof(dwc_otg_dev_in_ep_regs_t);
+	bank_count++;
+
+	dwc_otg_dev_out_ep_regs_t *out_ep= base->dev_if->out_ep_regs[0];
+	banks[bank_count] = out_ep;
+	sizes[bank_count] = sizeof(dwc_otg_dev_out_ep_regs_t);
+	bank_count++;
+
+	dwc_otg_host_global_regs_t *host_global = base->host_if->host_global_regs;
+	banks[bank_count] = host_global;
+	sizes[bank_count] = sizeof(dwc_otg_host_global_regs_t);
+	bank_count++;
+
+	dwc_otg_hc_regs_t *hc = base->host_if->hc_regs[0];
+	banks[bank_count] = hc;
+	sizes[bank_count] = sizeof(dwc_otg_hc_regs_t);
+	bank_count++;
+}
+
+void log_reg_rw(int rw, const char *str, uint32_t value) {
+	trace_printk("%d,%s,%08x\n", rw, str, value);
+}
+EXPORT_SYMBOL(log_reg_rw);
+
 static int dwc_otg_setup_params(dwc_otg_core_if_t * core_if);
 
 /**
@@ -88,6 +146,7 @@ dwc_otg_core_if_t *dwc_otg_cil_init(const uint32_t * reg_base_addr)
 	DWC_DEBUGPL(DBG_CILV, "%s(%p)\n", __func__, reg_base_addr);
 
 	core_if = DWC_ALLOC(sizeof(dwc_otg_core_if_t));
+
 
 	if (core_if == NULL) {
 		DWC_DEBUGPL(DBG_CIL,
@@ -171,6 +230,12 @@ dwc_otg_core_if_t *dwc_otg_cil_init(const uint32_t * reg_base_addr)
 
 	/* Initiate lx_state to L3 disconnected state */
 	core_if->lx_state = DWC_OTG_L3;
+
+	/* lwg: before any read/write and its members are supposed to be initialized! */
+	usb_core = core_if;
+	init_regmap();
+
+
 	/*
 	 * Store the contents of the hardware configuration registers here for
 	 * easy access later.
@@ -381,6 +446,9 @@ static void dwc_otg_enable_common_interrupts(dwc_otg_core_if_t * core_if)
 		intr_mask.b.rxstsqlvl = 1;
 	}
 
+	/* lwg: do not enable sof ---
+	 * kernel will hang... */
+	/*intr_mask.b.sofintr = 1;*/
 	intr_mask.b.conidstschng = 1;
 	intr_mask.b.wkupintr = 1;
 	intr_mask.b.disconnect = 0;

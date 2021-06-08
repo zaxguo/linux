@@ -140,6 +140,9 @@ irqreturn_t __handle_irq_event_percpu(struct irq_desc *desc, unsigned int *flags
 
 	record_irq_time(desc);
 
+	if (irq == 41) {
+		trace_printk("usb irq start\n");
+	}
 	for_each_action_of_desc(desc, action) {
 		irqreturn_t res;
 
@@ -174,6 +177,9 @@ irqreturn_t __handle_irq_event_percpu(struct irq_desc *desc, unsigned int *flags
 		}
 
 		retval |= res;
+	}
+	if (irq == 41) {
+		trace_printk("usb irq end\n");
 	}
 
 	return retval;

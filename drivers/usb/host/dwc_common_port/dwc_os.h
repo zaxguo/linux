@@ -376,6 +376,9 @@ extern uint16_t DWC_BE16_TO_CPU(uint16_t *p);
 /* Linux doesn't need any extra parameters for register read/write, so we
  * just throw away the IO context parameter.
  */
+
+
+
 /** Reads the content of a 32-bit register. */
 extern uint32_t DWC_READ_REG32(uint32_t volatile *reg);
 #define dwc_read_reg32(_ctx_,_reg_) DWC_READ_REG32(_reg_)

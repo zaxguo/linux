@@ -2343,8 +2343,9 @@ static int enigma_dbg_show(struct seq_file *s, void *unused) {
 	printk("filedata read: %ld, write: %ld\n", filedata_read, filedata_write);
 	printk("metadata read: %ld, write: %ld\n", metadata_read, metadata_write);
 
+	int cnt = enigma_dump_emu_disk(0);
 	/*encrypt_btt(0);*/
-	/*return 0;*/
+	return 0;
 
 	/*check_armtf();*/
 	/*for (i = 0; i < BTT_SIZE; i++) {*/
