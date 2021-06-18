@@ -2465,7 +2465,7 @@ static int __init loop_init(void)
 	printk(KERN_INFO "loop: module loaded, max_loop = %d\n", max_loop);
 
 	// lwg: one-time init of enigma loop cb -- turn off for strawman approach
-	init_enigma_cb();
+	/*init_enigma_cb();*/
 	printk("BTT disabled!!\n");
 	/*check_armtf();*/
 	return 0;

@@ -117,6 +117,18 @@ static void init_regmap(void) {
 }
 
 void log_reg_rw(int rw, const char *str, uint32_t value) {
+	return;
+	int i, j;
+	i = strlen("gintmsk");
+	j = strlen(str);
+	if (!strcmp(str + (j - i), "gintmsk")) {
+		if (rw == 1) {
+			/*printk("write %08x to gintmsk...\n", value);*/
+			if (value & (1 << 3)) {
+				/*dump_stack();*/
+			}
+		}
+	}
 	trace_printk("%d,%s,%08x\n", rw, str, value);
 }
 EXPORT_SYMBOL(log_reg_rw);
@@ -233,7 +245,7 @@ dwc_otg_core_if_t *dwc_otg_cil_init(const uint32_t * reg_base_addr)
 
 	/* lwg: before any read/write and its members are supposed to be initialized! */
 	usb_core = core_if;
-	init_regmap();
+	/*init_regmap();*/
 
 
 	/*
@@ -403,6 +415,9 @@ void dwc_otg_enable_global_interrupts(dwc_otg_core_if_t * core_if)
 	gahbcfg_data_t ahbcfg = {.d32 = 0 };
 	ahbcfg.b.glblintrmsk = 1;	/* Enable interrupts */
 	DWC_MODIFY_REG32(&core_if->core_global_regs->gahbcfg, 0, ahbcfg.d32);
+	u32 val = DWC_READ_REG32(&core_if->core_global_regs->gintmsk);
+	/* lwg: sof has not been enabled! */
+	printk("lwg:%s:%d: msk = %08x\n", __func__, __LINE__, val);
 }
 
 /**
@@ -446,9 +461,9 @@ static void dwc_otg_enable_common_interrupts(dwc_otg_core_if_t * core_if)
 		intr_mask.b.rxstsqlvl = 1;
 	}
 
-	/* lwg: do not enable sof ---
-	 * kernel will hang... */
+	/* lwg: donot write 1 to enable intr */
 	/*intr_mask.b.sofintr = 1;*/
+
 	intr_mask.b.conidstschng = 1;
 	intr_mask.b.wkupintr = 1;
 	intr_mask.b.disconnect = 0;
@@ -2089,6 +2104,8 @@ void dwc_otg_enable_host_interrupts(dwc_otg_core_if_t * core_if)
 	intr_mask.b.hcintr = 1;
 
 	DWC_MODIFY_REG32(&global_regs->gintmsk, intr_mask.d32, intr_mask.d32);
+	u32 val = DWC_READ_REG32(&global_regs->gintmsk);
+	printk("lwg:%s:%d:val = %08x\n", __func__, __LINE__, val);
 }
 
 /**
@@ -2107,6 +2124,9 @@ void dwc_otg_disable_host_interrupts(dwc_otg_core_if_t * core_if)
 	 * Disable host mode interrupts without disturbing common
 	 * interrupts.
 	 */
+	/* lwg: set to 0 = irq off */
+	/*intr_mask.b.sofintr = 0;*/
+
 	intr_mask.b.sofintr = 1;
 	intr_mask.b.portintr = 1;
 	intr_mask.b.hcintr = 1;

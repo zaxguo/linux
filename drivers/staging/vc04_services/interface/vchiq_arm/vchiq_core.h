@@ -362,6 +362,8 @@ typedef struct vchiq_shared_state_struct {
 	/* Indicates the byte position within the stream where the next message
 	** will be written. The least significant bits are an index into the
 	** slot. The next bits are the index of the slot in slot_queue. */
+
+	/* lwg: least significant bits ???  what does this mean */
 	int tx_pos;
 
 	/* This event should be signalled when a slot is recycled. */
@@ -440,6 +442,7 @@ struct vchiq_state_struct {
 	/* Local implementation of the sync release remote event */
 	struct semaphore sync_release_event;
 
+	/* lwg: pointer to the current slot of tx ?? */
 	char *tx_data;
 	char *rx_data;
 	VCHIQ_SLOT_INFO_T *rx_info;

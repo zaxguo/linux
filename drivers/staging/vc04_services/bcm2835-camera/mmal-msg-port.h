@@ -98,6 +98,7 @@ struct mmal_port {
 
 	u32 component; /* Component this port belongs to (Read Only) */
 
+	/* lwg: 17th word */
 	u32 userdata; /* Field reserved for use by the client */
 
 	u32 capabilities; /* Flags describing the capabilities of a

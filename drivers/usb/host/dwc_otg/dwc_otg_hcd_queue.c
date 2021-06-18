@@ -692,6 +692,9 @@ int dwc_otg_hcd_qh_add(dwc_otg_hcd_t * hcd, dwc_otg_qh_t * qh)
 	} else {
 		status = schedule_periodic(hcd, qh);
 		if ( !hcd->periodic_qh_count ) {
+			/* liwei: okay to turn off??
+			 * confirmed -- ISO devices rely on sofintr */
+
 			intr_mask.b.sofintr = 1;
 			if (fiq_enable) {
 				local_fiq_disable();

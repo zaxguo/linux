@@ -82,9 +82,12 @@ vchiq_static_assert(IS_POW2(VCHIQ_MAX_SERVICES));
 vchiq_static_assert(VCHIQ_VERSION >= VCHIQ_VERSION_MIN);
 
 /* Run time control of log level, based on KERN_XXX level. */
-int vchiq_core_log_level = VCHIQ_LOG_DEFAULT;
-int vchiq_core_msg_log_level = VCHIQ_LOG_DEFAULT;
-int vchiq_sync_log_level = VCHIQ_LOG_DEFAULT;
+/*int vchiq_core_log_level = VCHIQ_LOG_DEFAULT;*/
+/*int vchiq_core_msg_log_level = VCHIQ_LOG_DEFAULT;*/
+/*int vchiq_sync_log_level = VCHIQ_LOG_DEFAULT;*/
+int vchiq_core_log_level = 8;
+int vchiq_core_msg_log_level = 8;
+int vchiq_sync_log_level = 8;
 
 static atomic_t pause_bulks_count = ATOMIC_INIT(0);
 
@@ -559,13 +562,19 @@ request_poll(VCHIQ_STATE_T *state, VCHIQ_SERVICE_T *service, int poll_type)
 
 /* Called from queue_message, by the slot handler and application threads,
 ** with slot_mutex held */
+
+/* a slot is simply a page */
 static VCHIQ_HEADER_T *
 reserve_space(VCHIQ_STATE_T *state, size_t space, int is_blocking)
 {
 	VCHIQ_SHARED_STATE_T *local = state->local;
 	int tx_pos = state->local_tx_pos;
+	/* lwg: remaining space of a slot */
 	int slot_space = VCHIQ_SLOT_SIZE - (tx_pos & VCHIQ_SLOT_MASK);
 
+	printk("lwg:%s:%d:local tx_pos = %d, space = %ld\n", __func__, __LINE__, tx_pos, space);
+
+	/* lwg: required space is larger than remaining size of a slot */
 	if (space > slot_space) {
 		VCHIQ_HEADER_T *header;
 		/* Fill the remaining space with padding */
@@ -575,9 +584,13 @@ reserve_space(VCHIQ_STATE_T *state, size_t space, int is_blocking)
 		header->msgid = VCHIQ_MSGID_PADDING;
 		header->size = slot_space - sizeof(VCHIQ_HEADER_T);
 
+		/* lwg: fill up the reamining size to be 4096... */
 		tx_pos += slot_space;
 	}
 
+	/* lwg: VCHIQ_SLOT_MASK = 0xfff
+	 * from prev code tx_pos = (4096 - (remaining) + remaining) = 4096
+	 * hence tx_pos & VCHIQ_SLOT_MASK == 0  */
 	/* If necessary, get the next slot. */
 	if ((tx_pos & VCHIQ_SLOT_MASK) == 0) {
 		int slot_index;
@@ -604,15 +617,19 @@ reserve_space(VCHIQ_STATE_T *state, size_t space, int is_blocking)
 			pr_warn("%s: invalid tx_pos: %d\n", __func__, tx_pos);
 			return NULL;
 		}
-
+		/* lwg: grab a new slot */
 		slot_index = local->slot_queue[
 			SLOT_QUEUE_INDEX_FROM_POS(tx_pos) &
 			VCHIQ_SLOT_QUEUE_MASK];
+		/* lwg: this now points to the beginning of a 4K slot */
 		state->tx_data =
 			(char *)SLOT_DATA_FROM_INDEX(state, slot_index);
+		printk("lwg:%s:%d:grab new slot @ %d\n", __func__, __LINE__, slot_index);
 	}
-
+	
+	/* lwg: update to point to next msg */
 	state->local_tx_pos = tx_pos + space;
+	printk("lwg:%s:%d:new tx_pos = %d\n", __func__, __LINE__, tx_pos);
 
 	return (VCHIQ_HEADER_T *)(state->tx_data + (tx_pos & VCHIQ_SLOT_MASK));
 }
@@ -984,6 +1001,7 @@ queue_message(VCHIQ_STATE_T *state, VCHIQ_SERVICE_T *service,
 
 		spin_unlock(&quota_spinlock);
 
+		/* lwg: this means a new slot is allocated & used */
 		if (slot_use_count)
 			vchiq_log_trace(vchiq_core_log_level,
 				"%d: qm:%d %s,%zx - slot_use->%d (hdr %p)",
@@ -1048,12 +1066,14 @@ queue_message(VCHIQ_STATE_T *state, VCHIQ_SERVICE_T *service,
 	if (!(flags & QMFLAGS_NO_MUTEX_UNLOCK))
 		mutex_unlock(&state->slot_mutex);
 
+	/* lwg: finally fire the msg!! */
 	remote_event_signal(&state->remote->trigger);
 
 	return VCHIQ_SUCCESS;
 }
 
 /* Called by the slot handler and application threads */
+/* lwg: context is a pointer to the original mmal_msg */
 static VCHIQ_STATUS_T
 queue_message_sync(VCHIQ_STATE_T *state, VCHIQ_SERVICE_T *service,
 	int msgid,
@@ -1073,10 +1093,15 @@ queue_message_sync(VCHIQ_STATE_T *state, VCHIQ_SERVICE_T *service,
 		(mutex_lock_killable(&state->sync_mutex) != 0))
 		return VCHIQ_RETRY;
 
+	/* lwg: how to emulate barrier based on kernel data structure?
+	 * emulate concurrency control? */
 	remote_event_wait(state, &local->sync_release);
 
 	rmb();
 
+	/* lwg: the mmal message will be copied here by copy_message_data().
+	 * the copy_callback is simply memcpy from vchiq_queue_kernel_message()  */
+	/* grab from slot_data, idx is slot_sync */
 	header = (VCHIQ_HEADER_T *)SLOT_DATA_FROM_INDEX(state,
 		local->slot_sync);
 
@@ -1095,6 +1120,9 @@ queue_message_sync(VCHIQ_STATE_T *state, VCHIQ_SERVICE_T *service,
 		       header, size, VCHIQ_MSG_SRCPORT(msgid),
 		       VCHIQ_MSG_DSTPORT(msgid));
 
+	/* lwg: not sure why the callback definition switched dst/st fields in the memcpy
+	 * the data is copied from context which points to mmal msg in kernel to header->data
+	 * there is also kernel callback vs userspace callback */
 	callback_result =
 		copy_message_data(copy_callback, context,
 				  header->data, size);
@@ -3304,6 +3332,7 @@ vchiq_remove_service(VCHIQ_SERVICE_HANDLE_T handle)
  * When called in blocking mode, the userdata field points to a bulk_waiter
  * structure.
  */
+/* lwg: investigate */
 VCHIQ_STATUS_T
 vchiq_bulk_transfer(VCHIQ_SERVICE_HANDLE_T handle,
 	VCHI_MEM_HANDLE_T memhandle, void *offset, int size, void *userdata,
@@ -3491,6 +3520,7 @@ vchiq_queue_message(VCHIQ_SERVICE_HANDLE_T handle,
 	switch (service->srvstate) {
 	case VCHIQ_SRVSTATE_OPEN:
 		status = queue_message(service->state, service,
+				/* lwg: pack src and dst port into msg id */
 				VCHIQ_MAKE_MSG(VCHIQ_MSG_DATA,
 					service->localport,
 					service->remoteport),

@@ -289,10 +289,13 @@ struct mmal_msg_buffer_from_host {
 	 * allow for multiple concurrent service users.
 	 */
 	/* control data */
+	/* lwg: 0 -- 3rd word */
 	struct mmal_driver_buffer drvbuf;
 
 	/* referenced control data for passthrough buffer management */
+	/* lwg: 4 -- 7th words */
 	struct mmal_driver_buffer drvbuf_ref;
+	/* lwg: 8 -- 21st words */
 	struct mmal_buffer_header buffer_header; /* buffer header itself */
 	struct mmal_buffer_header_type_specific buffer_header_type_specific;
 	s32 is_zero_copy;

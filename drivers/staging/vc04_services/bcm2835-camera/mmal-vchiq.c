@@ -38,7 +38,9 @@
 /* maximum number of components supported */
 #define VCHIQ_MMAL_MAX_COMPONENTS 4
 
-/*#define FULL_MSG_DUMP 1*/
+/* defined by -D */
+#define DEBUG
+#define FULL_MSG_DUMP 1
 
 #ifdef DEBUG
 static const char *const msg_type_names[] = {
@@ -86,7 +88,7 @@ static const char *const port_action_type_names[] = {
 #if defined(FULL_MSG_DUMP)
 #define DBG_DUMP_MSG(MSG, MSG_LEN, TITLE)				\
 	do {								\
-		pr_debug(TITLE" type:%s(%d) length:%d\n",		\
+		printk(TITLE" type:%s(%d) length:%d\n",		\
 			 msg_type_names[(MSG)->h.type],			\
 			 (MSG)->h.type, (MSG_LEN));			\
 		print_hex_dump(KERN_DEBUG, "<<h: ", DUMP_PREFIX_OFFSET,	\
@@ -497,7 +499,7 @@ buffer_from_host(struct vchiq_mmal_instance *instance,
 	struct mmal_msg m;
 	int ret;
 
-	pr_debug("instance:%p buffer:%p\n", instance->handle, buf);
+	pr_debug("instance:%p buffer:%p, buf->buffer:%p\n", instance->handle, buf, buf->buffer);
 
 	/* bulk mutex stops other bulk operations while we
 	 * have a receive in progress
@@ -537,6 +539,7 @@ buffer_from_host(struct vchiq_mmal_instance *instance,
 
 	/* buffer header */
 	m.u.buffer_from_host.buffer_header.cmd = 0;
+	/* lwg: XXX buf address */
 	m.u.buffer_from_host.buffer_header.data =
 		(u32)(unsigned long)buf->buffer;
 	m.u.buffer_from_host.buffer_header.alloc_size = buf->buffer_size;
@@ -554,6 +557,10 @@ buffer_from_host(struct vchiq_mmal_instance *instance,
 	m.u.buffer_from_host.payload_in_message = 0;
 
 	vchi_service_use(instance->handle);
+
+	/* lwg: complete dbg */
+	DBG_DUMP_MSG(&m, (sizeof(struct mmal_msg_header) + sizeof(m.u.buffer_from_host)), ">>> sync message");
+
 
 	ret = vchi_queue_kernel_message(instance->handle,
 					&m,
@@ -850,13 +857,27 @@ static int send_synchronous_mmal_msg(struct vchiq_mmal_instance *instance,
 
 	init_completion(&msg_context->u.sync.cmplt);
 
+	/* lwg: clear about this part */
 	msg->h.magic = MMAL_MAGIC;
+	/* basically a counter */
 	msg->h.context = msg_context->handle;
 	msg->h.status = 0;
+
+	/* lwg: try messing up with payload for get version */
+	if (msg->h.type == MMAL_MSG_TYPE_GET_VERSION) {
+		msg->u.version.flags = 0xdeadbeef;
+		msg->u.version.major = 0xdeadbeef;
+		msg->u.version.minor = 0xdeadbeef;
+		msg->u.version.minimum = 0xdeadbeef;
+		/* ??? */
+		msg->h.control_service = 0xdeadbeef;
+	}
+
 
 	DBG_DUMP_MSG(msg, (sizeof(struct mmal_msg_header) + payload_len),
 		     ">>> sync message");
 
+	/* lwg: routine to increment refcount on a service */
 	vchi_service_use(instance->handle);
 
 	ret = vchi_queue_kernel_message(instance->handle,
@@ -958,6 +979,9 @@ static int port_info_set(struct vchiq_mmal_instance *instance,
 	VCHI_HELD_MSG_T rmsg_handle;
 
 	pr_debug("setting port info port %p\n", port);
+	/* lwg: eliminate garbage value */
+	memset(&m, 0x0, sizeof(m));
+
 	if (!port)
 		return -1;
 	dump_port_info(port);
@@ -1017,6 +1041,9 @@ static int port_info_get(struct vchiq_mmal_instance *instance,
 	struct mmal_msg m;
 	struct mmal_msg *rmsg;
 	VCHI_HELD_MSG_T rmsg_handle;
+
+	/* lwg: avoid garbage */
+	memset(&m, 0x0, sizeof(m));
 
 	/* port info time */
 	m.h.type = MMAL_MSG_TYPE_PORT_INFO_GET;
@@ -1194,6 +1221,9 @@ static int enable_component(struct vchiq_mmal_instance *instance,
 	struct mmal_msg *rmsg;
 	VCHI_HELD_MSG_T rmsg_handle;
 
+	/* lwg: avoid garbage */
+	memset(&m, 0x0, sizeof(m));
+
 	m.h.type = MMAL_MSG_TYPE_COMPONENT_ENABLE;
 	m.u.component_enable.component_handle = component->handle;
 
@@ -1226,6 +1256,9 @@ static int disable_component(struct vchiq_mmal_instance *instance,
 	struct mmal_msg *rmsg;
 	VCHI_HELD_MSG_T rmsg_handle;
 
+	/* lwg: avoid garbage */
+	memset(&m, 0x0, sizeof(m));
+
 	m.h.type = MMAL_MSG_TYPE_COMPONENT_DISABLE;
 	m.u.component_disable.component_handle = component->handle;
 
@@ -1256,6 +1289,7 @@ static int get_version(struct vchiq_mmal_instance *instance,
 {
 	int ret;
 	struct mmal_msg m;
+	/* reply */
 	struct mmal_msg *rmsg;
 	VCHI_HELD_MSG_T rmsg_handle;
 
@@ -1291,6 +1325,9 @@ static int port_action_port(struct vchiq_mmal_instance *instance,
 	struct mmal_msg m;
 	struct mmal_msg *rmsg;
 	VCHI_HELD_MSG_T rmsg_handle;
+
+	/* lwg */
+	memset(&m, 0x0, sizeof(m));
 
 	m.h.type = MMAL_MSG_TYPE_PORT_ACTION;
 	m.u.port_action_port.component_handle = port->component->handle;
@@ -1335,6 +1372,9 @@ static int port_action_handle(struct vchiq_mmal_instance *instance,
 	struct mmal_msg m;
 	struct mmal_msg *rmsg;
 	VCHI_HELD_MSG_T rmsg_handle;
+
+	/* lwg: avoid garbage */
+	memset(&m, 0x0, sizeof(m));
 
 	m.h.type = MMAL_MSG_TYPE_PORT_ACTION;
 
@@ -1382,6 +1422,9 @@ static int port_parameter_set(struct vchiq_mmal_instance *instance,
 	struct mmal_msg *rmsg;
 	VCHI_HELD_MSG_T rmsg_handle;
 
+	/* lwg: avoid garbage */
+	memset(&m, 0x0, sizeof(m));
+
 	m.h.type = MMAL_MSG_TYPE_PORT_PARAMETER_SET;
 
 	m.u.port_parameter_set.component_handle = port->component->handle;
@@ -1423,6 +1466,9 @@ static int port_parameter_get(struct vchiq_mmal_instance *instance,
 	struct mmal_msg *rmsg;
 	VCHI_HELD_MSG_T rmsg_handle;
 
+	/* lwg: avoid garbage */
+	memset(&m, 0x0, sizeof(m));
+
 	m.h.type = MMAL_MSG_TYPE_PORT_PARAMETER_GET;
 
 	m.u.port_parameter_get.component_handle = port->component->handle;
@@ -1458,6 +1504,7 @@ static int port_parameter_get(struct vchiq_mmal_instance *instance,
 		       *value_size);
 		*value_size = rmsg->u.port_parameter_get_reply.size;
 	} else
+		/* lwg: only value will be extracted */
 		memcpy(value, &rmsg->u.port_parameter_get_reply.value,
 		       rmsg->u.port_parameter_get_reply.size);
 

@@ -236,8 +236,10 @@ remote_event_signal(REMOTE_EVENT_T *event)
 
 	dsb(sy);         /* data barrier operation */
 
-	if (event->armed)
+	if (event->armed) {
 		writel(0, g_regs + BELL2); /* trigger vc interrupt */
+		printk("lwg:%s:%d:write 0 to BELL2\n", __func__, __LINE__);
+	}
 }
 
 VCHIQ_STATUS_T
@@ -354,6 +356,8 @@ vchiq_doorbell_irq(int irq, void *dev_id)
 
 	/* Read (and clear) the doorbell */
 	status = readl(g_regs + BELL0);
+	printk("lwg:%s:%d:read %08x from BELL0\n", __func__, __LINE__, status);
+
 
 	if (status & 0x4) {  /* Was the doorbell rung? */
 		remote_event_pollall(state);
