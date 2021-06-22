@@ -43,6 +43,11 @@
 #include <linux/mm.h>
 #include <linux/of.h>
 #include <soc/bcm2835/raspberrypi-firmware.h>
+/* lwg: dump memory */
+#include <linux/binfmts.h>
+#include <linux/coredump.h>
+#include <linux/elf.h>
+#include <linux/proc_fs.h>
 
 #define TOTAL_SLOTS (VCHIQ_SLOT_ZERO_SLOTS + 2 * 32)
 
@@ -58,6 +63,198 @@
 
 #define BELL0	0x00
 #define BELL2	0x08
+
+#define MAX_SEGS 200
+struct dump_cb {
+	struct coredump_params *cprm;
+	void *slot_virt;
+	int seg_bytes;
+	int segs;
+	/* stores temporary snapshot */
+	void *stash[MAX_SEGS];
+};
+
+void *slot_virt;
+int slot_dump_size;
+struct dump_cb* cb;
+
+static struct file* file_open(const char *path, int flags, int rights) {
+	struct file *filp = NULL;
+	mm_segment_t oldfs;
+	int err = 0;
+
+	oldfs = get_fs();
+	// set_fs(get_ds());
+	set_fs(KERNEL_DS);
+	filp = filp_open(path, flags, rights);
+	set_fs(oldfs);
+	if (IS_ERR(filp)) {
+		err = PTR_ERR(filp);
+		return NULL;
+	}
+	return filp;
+}
+
+
+
+static void fill_elf_header(struct elfhdr *elf, int segs,
+			    u16 machine, u32 flags)
+{
+	memset(elf, 0, sizeof(*elf));
+
+	memcpy(elf->e_ident, ELFMAG, SELFMAG);
+	elf->e_ident[EI_CLASS] = ELF_CLASS;
+	elf->e_ident[EI_DATA] = ELF_DATA;
+	elf->e_ident[EI_VERSION] = EV_CURRENT;
+	elf->e_ident[EI_OSABI] = ELF_OSABI;
+
+	elf->e_type = ET_CORE;
+	elf->e_machine = machine;
+	elf->e_version = EV_CURRENT;
+	elf->e_phoff = sizeof(struct elfhdr);
+	elf->e_flags = flags;
+	elf->e_ehsize = sizeof(struct elfhdr);
+	elf->e_phentsize = sizeof(struct elf_phdr);
+	elf->e_phnum = segs;
+}
+
+
+
+static int cam_replay_dump(struct seq_file *s, void *unused) {
+	printk("start dumping..\n");
+	struct coredump_params *cprm = cb->cprm;
+	struct elfhdr elf;
+	Elf_Half e_phnum;
+	elf_addr_t e_shoff;
+	int offset, dataoff, i;
+	int segs = cb->segs;
+
+	if (IS_ERR(cb->cprm->file)) {
+		printk("prev file open failed! try again..\n");
+		struct file *f = file_open("/tmp/msg_dump.elf", O_WRONLY | O_CREAT, 0644);
+		if (!f) {
+			printk("still cannot create! abort..\n");
+		}
+		cb->cprm->file = f;
+		printk("successfully create dump file...\n");
+	}
+
+	e_phnum = (segs > PN_XNUM) ? PN_XNUM : segs;
+	BUG_ON(e_phnum != segs);
+
+	/* elfhdr */
+	fill_elf_header(&elf, segs, ELF_ARCH, 0);
+	offset += sizeof(elf);
+	offset += segs * sizeof(struct elf_phdr);
+
+	dataoff = offset = roundup(offset, ELF_EXEC_PAGESIZE);
+	/* all segs */
+	offset += (segs * cb->seg_bytes);
+	e_shoff = offset;
+	offset = dataoff;
+
+	/* first dump elf header */
+	if (!dump_emit(cprm, &elf, sizeof(elf))) {
+		printk("cannot dump header!...\n");
+	}
+
+	/* then dump program header */
+	for (i = 0; i < segs; i++) {
+		struct elf_phdr phdr;
+		phdr.p_type = PT_LOAD;
+		phdr.p_offset = offset;
+		phdr.p_vaddr = 0;
+		phdr.p_paddr = 0;
+		/* lwg: XXX page aligned? */
+		phdr.p_memsz = cb->seg_bytes;
+		phdr.p_filesz = cb->seg_bytes;
+		phdr.p_flags = (PF_R|PF_W);
+		phdr.p_align = ELF_EXEC_PAGESIZE;
+		/* update offset */
+		offset += phdr.p_filesz;
+
+		if (!dump_emit(cprm, &phdr, sizeof(phdr))) {
+			printk("failed to dump %d phdr\n", i);
+		}
+	}
+
+	/* finally dump data */
+	/* align to page */
+	if (!dump_skip(cprm, dataoff - cprm->pos)) {
+		printk("cannot align to page!\n");
+	}
+
+	for (i = 0; i < segs; i++) {
+		if (!dump_emit(cprm, cb->stash[i], cb->seg_bytes)) {
+			printk("fail to dump %d at stash! (size = %d)\n", i, cb->seg_bytes);
+		}
+	}
+
+	printk("finished dumping..\n");
+	return 0;
+}
+
+
+static int cam_replay_open(struct inode *inode, struct file *file) {
+	return single_open(file, cam_replay_dump, NULL);
+}
+
+static const struct file_operations cam_replay_ops = {
+	.open = cam_replay_open,
+	.read = seq_read,
+	.llseek = seq_lseek,
+	.release = single_release,
+};
+
+
+/* reference impl in elf_core_dump */
+static void init_dump_cb(void *addr, size_t size) {
+	struct coredump_params *cparam;
+	struct file *f;
+	int i;
+	cparam = kmalloc(sizeof(struct coredump_params), GFP_KERNEL);
+	cb = kmalloc(sizeof(struct dump_cb), GFP_KERNEL);
+	BUG_ON(!cparam);
+	BUG_ON(!cb);
+
+	/* lwg: compiled into kernel just directly use filp_open */
+	/*f = file_open("/tmp/msg_dump.elf", O_WRONLY | O_CREAT, 0644);*/
+	f = filp_open("/tmp/msg_dump.elf", O_WRONLY | O_CREAT, 0644);
+	if (!f) {
+		printk("cannot create dump file!\n");
+		return;
+	}
+	printk("lwg:%s:dump file opened @ %p\n", __func__, f);
+
+	cparam->siginfo= NULL;
+	cparam->regs = NULL;
+	cparam->limit = 0xffffffff;
+	cparam->file = f;
+	cparam->written = 0;
+	cparam->pos = 0;
+
+
+	cb->cprm = cparam;
+	cb->slot_virt = addr;
+	cb->segs = 0;
+	cb->seg_bytes = size;
+	for (i = 0; i < MAX_SEGS; i++) {
+		cb->stash[i] = NULL;
+	}
+	proc_create("cam_replay", 0, NULL, &cam_replay_ops);
+	printk("dump cb initialized...\n");
+	return 0;
+}
+
+static void take_snapshot(struct dump_cb *cb) {
+	BUG_ON(!cb);
+	/* lwg: by now wmb has been issued */
+	void *tmp = kvmalloc(cb->seg_bytes, GFP_KERNEL);
+	memcpy(tmp, cb->slot_virt, cb->seg_bytes);
+	cb->stash[cb->segs++] = tmp;
+	printk("kacha! segs = %d\n", cb->segs);
+	return;
+}
 
 typedef struct vchiq_2835_state_struct {
 	int inited;
@@ -134,6 +331,7 @@ int vchiq_platform_init(struct platform_device *pdev, VCHIQ_STATE_T *state)
 	slot_mem_size = PAGE_ALIGN(TOTAL_SLOTS * VCHIQ_SLOT_SIZE);
 	frag_mem_size = PAGE_ALIGN(g_fragments_size * MAX_FRAGMENTS);
 
+	/* lwg: of course its DMA address */
 	slot_mem = dmam_alloc_coherent(dev, slot_mem_size + frag_mem_size,
 				       &slot_phys, GFP_KERNEL);
 	if (!slot_mem) {
@@ -149,16 +347,19 @@ int vchiq_platform_init(struct platform_device *pdev, VCHIQ_STATE_T *state)
 
 	vchiq_slot_zero->platform_data[VCHIQ_PLATFORM_FRAGMENTS_OFFSET_IDX] =
 		(int)slot_phys + slot_mem_size;
+	/* lwg: we have 64 fragments */
 	vchiq_slot_zero->platform_data[VCHIQ_PLATFORM_FRAGMENTS_COUNT_IDX] =
 		MAX_FRAGMENTS;
 
 	g_fragments_base = (char *)slot_mem + slot_mem_size;
 
 	g_free_fragments = g_fragments_base;
+	/* lwg: linked fragments??  */
 	for (i = 0; i < (MAX_FRAGMENTS - 1); i++) {
 		*(char **)&g_fragments_base[i*g_fragments_size] =
 			&g_fragments_base[(i + 1)*g_fragments_size];
 	}
+	/* lwg: last frag points to NULL */
 	*(char **)&g_fragments_base[i * g_fragments_size] = NULL;
 	sema_init(&g_free_fragments_sema, MAX_FRAGMENTS);
 
@@ -183,10 +384,18 @@ int vchiq_platform_init(struct platform_device *pdev, VCHIQ_STATE_T *state)
 		return err;
 	}
 
-	/* Send the base address of the slots to VideoCore */
+	/* lwg: set up dump control block before first irq  */
+	slot_virt = slot_mem;
+	slot_dump_size = slot_mem_size;
+	init_dump_cb(slot_mem, slot_mem_size + frag_mem_size);
+
+	/* Send the base address of the slots to VideoCore
+	 * lwg: ha! */
 	channelbase = slot_phys;
 	err = rpi_firmware_property(fw, RPI_FIRMWARE_VCHIQ_INIT,
 				    &channelbase, sizeof(channelbase));
+
+
 	if (err || channelbase) {
 		dev_err(dev, "failed to set channelbase\n");
 		return err ? : -ENXIO;
@@ -198,6 +407,7 @@ int vchiq_platform_init(struct platform_device *pdev, VCHIQ_STATE_T *state)
 		vchiq_slot_zero, &slot_phys);
 
 	vchiq_call_connected_callbacks();
+
 
 	return 0;
 }
@@ -235,6 +445,10 @@ remote_event_signal(REMOTE_EVENT_T *event)
 	event->fired = 1;
 
 	dsb(sy);         /* data barrier operation */
+
+
+	/* record into tmp memory first */
+	take_snapshot(cb);
 
 	if (event->armed) {
 		writel(0, g_regs + BELL2); /* trigger vc interrupt */
@@ -358,6 +572,8 @@ vchiq_doorbell_irq(int irq, void *dev_id)
 	status = readl(g_regs + BELL0);
 	printk("lwg:%s:%d:read %08x from BELL0\n", __func__, __LINE__, status);
 
+	/* record upon irq */
+	take_snapshot(cb);
 
 	if (status & 0x4) {  /* Was the doorbell rung? */
 		remote_event_pollall(state);

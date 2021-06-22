@@ -572,9 +572,10 @@ reserve_space(VCHIQ_STATE_T *state, size_t space, int is_blocking)
 	/* lwg: remaining space of a slot */
 	int slot_space = VCHIQ_SLOT_SIZE - (tx_pos & VCHIQ_SLOT_MASK);
 
-	printk("lwg:%s:%d:local tx_pos = %d, space = %ld\n", __func__, __LINE__, tx_pos, space);
+	printk("lwg:%s:%d:local tx_pos = %d, space = %ld, slot_space = %d\n", __func__, __LINE__, tx_pos, space, slot_space);
 
-	/* lwg: required space is larger than remaining size of a slot */
+	/* lwg: if the msg has to span two slots, fill up existing slot with MSG_PADDING
+	 * allocate new slot  */
 	if (space > slot_space) {
 		VCHIQ_HEADER_T *header;
 		/* Fill the remaining space with padding */
@@ -589,8 +590,9 @@ reserve_space(VCHIQ_STATE_T *state, size_t space, int is_blocking)
 	}
 
 	/* lwg: VCHIQ_SLOT_MASK = 0xfff
-	 * from prev code tx_pos = (4096 - (remaining) + remaining) = 4096
-	 * hence tx_pos & VCHIQ_SLOT_MASK == 0  */
+	 * when current slot is not enough to hold current msg,
+	 * get next slot */
+
 	/* If necessary, get the next slot. */
 	if ((tx_pos & VCHIQ_SLOT_MASK) == 0) {
 		int slot_index;
@@ -626,10 +628,12 @@ reserve_space(VCHIQ_STATE_T *state, size_t space, int is_blocking)
 			(char *)SLOT_DATA_FROM_INDEX(state, slot_index);
 		printk("lwg:%s:%d:grab new slot @ %d\n", __func__, __LINE__, slot_index);
 	}
-	
+
 	/* lwg: update to point to next msg */
 	state->local_tx_pos = tx_pos + space;
-	printk("lwg:%s:%d:new tx_pos = %d\n", __func__, __LINE__, tx_pos);
+	printk("lwg:%s:%d:new tx_pos = %d\n", __func__, __LINE__, state->local_tx_pos);
+
+	/* lwg: about tx_pos -- see SLOT_QUEUE_INDEX_FROM_POS */
 
 	return (VCHIQ_HEADER_T *)(state->tx_data + (tx_pos & VCHIQ_SLOT_MASK));
 }
@@ -2356,6 +2360,7 @@ vchiq_init_slots(void *mem_base, int mem_size)
 	VCHIQ_SLOT_ZERO_T *slot_zero =
 		(VCHIQ_SLOT_ZERO_T *)((char *)mem_base + mem_align);
 	int num_slots = (mem_size - mem_align)/VCHIQ_SLOT_SIZE;
+	/* lwg: -- this is 1 */
 	int first_data_slot = VCHIQ_SLOT_ZERO_SLOTS;
 
 	/* Ensure there is enough memory to run an absolutely minimum system */

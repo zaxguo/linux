@@ -362,8 +362,6 @@ typedef struct vchiq_shared_state_struct {
 	/* Indicates the byte position within the stream where the next message
 	** will be written. The least significant bits are an index into the
 	** slot. The next bits are the index of the slot in slot_queue. */
-
-	/* lwg: least significant bits ???  what does this mean */
 	int tx_pos;
 
 	/* This event should be signalled when a slot is recycled. */

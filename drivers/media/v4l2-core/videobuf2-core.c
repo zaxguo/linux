@@ -49,8 +49,8 @@ module_param(debug, int, 0644);
  */
 
 #define log_memop(vb, op)						\
-	dprintk(2, "call_memop(%p, %d, %s)%s\n",			\
-		(vb)->vb2_queue, (vb)->index, #op,			\
+	dprintk(2, "call_memop(%p, %d, %s, %pF)%s\n",			\
+		(vb)->vb2_queue, (vb)->index, #op, (vb)->vb2_queue->mem_ops->op,			\
 		(vb)->vb2_queue->mem_ops->op ? "" : " (nop)")
 
 #define call_memop(vb, op, args...)					\

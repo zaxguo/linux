@@ -484,6 +484,7 @@ static void buffer_queue(struct vb2_buffer *vb)
 	v4l2_dbg(1, bcm2835_v4l2_debug, &dev->v4l2_dev,
 		 "%s: dev:%p buf:%p\n", __func__, dev, buf);
 
+	/* lwg: XXX */
 	buf->buffer = vb2_plane_vaddr(&buf->vb.vb2_buf, 0);
 	buf->buffer_size = vb2_plane_size(&buf->vb.vb2_buf, 0);
 

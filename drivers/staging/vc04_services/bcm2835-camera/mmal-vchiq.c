@@ -539,9 +539,22 @@ buffer_from_host(struct vchiq_mmal_instance *instance,
 
 	/* buffer header */
 	m.u.buffer_from_host.buffer_header.cmd = 0;
-	/* lwg: XXX buf address */
+	/* lwg: XXX annotate: buf address of vb2_plane
+	 * allocated by vmalloc_user(...) -- how can VC access this address? */
 	m.u.buffer_from_host.buffer_header.data =
 		(u32)(unsigned long)buf->buffer;
+
+	if (is_vmalloc_addr(buf->buffer)) {
+		printk("lwg:%s:%d:tamper this passed vmalloc value (%p)!!!\n", __func__, __LINE__, buf->buffer);
+		m.u.buffer_from_host.buffer_header.data = 0xdeadbeef;
+		/* lwg: does not seem to affect execution results! */
+	} else {
+		/* dump some info */
+		printk("lwg:%s:%d:phys addr of buffer = %08x, size = %08x\n", __func__, __LINE__, virt_to_phys(buf->buffer), buf->buffer_size);
+		print_hex_dump(KERN_WARNING, "buf data:", DUMP_PREFIX_OFFSET,
+				16, 4, buf->buffer, 64, 1);
+	}
+
 	m.u.buffer_from_host.buffer_header.alloc_size = buf->buffer_size;
 	m.u.buffer_from_host.buffer_header.length = 0;	/* nothing used yet */
 	m.u.buffer_from_host.buffer_header.offset = 0;	/* no offset */
@@ -967,7 +980,10 @@ static void port_to_mmal_msg(struct vchiq_mmal_port *port, struct mmal_port *p)
 	/* only three writable fields in a port */
 	p->buffer_num = port->current_buffer.num;
 	p->buffer_size = port->current_buffer.size;
+	/* lwg: XXX: annotate:
+	 * kernel addr is linearly mapped, can directly take out lower 4B as paddr */
 	p->userdata = (u32)(unsigned long)port;
+	printk("lwg:%s:%d:phys addr of port = %08x, virt = %p\n", __func__, __LINE__, virt_to_phys(port), port);
 }
 
 static int port_info_set(struct vchiq_mmal_instance *instance,
@@ -1143,6 +1159,7 @@ static int create_component(struct vchiq_mmal_instance *instance,
 
 	/* build component create message */
 	m.h.type = MMAL_MSG_TYPE_COMPONENT_CREATE;
+	/* lwg: XXX: annotate */
 	m.u.component_create.client_component = (u32)(unsigned long)component;
 	strncpy(m.u.component_create.name, name,
 		sizeof(m.u.component_create.name));
