@@ -72,11 +72,30 @@ struct dump_cb {
 	int segs;
 	/* stores temporary snapshot */
 	void *stash[MAX_SEGS];
+	int flags[MAX_SEGS];
+};
+
+struct replay_cb {
+	/* slot mem */
+	void *slot;
+	/* head of elf phdr array */
+	struct elf_phdr *head;
+	/* mem dump file to read from */
+	struct file *dump;
+	/* current idx to the req */
+	int req_idx;
+	/* current idx to the reply */
+	int reply_idx;
+	/* max idx */
+	int segs;
+	/* sync irq */
+	int complete;
 };
 
 void *slot_virt;
 int slot_dump_size;
 struct dump_cb* cb;
+struct replay_cb *replay;
 
 static struct file* file_open(const char *path, int flags, int rights) {
 	struct file *filp = NULL;
@@ -94,8 +113,6 @@ static struct file* file_open(const char *path, int flags, int rights) {
 	}
 	return filp;
 }
-
-
 
 static void fill_elf_header(struct elfhdr *elf, int segs,
 			    u16 machine, u32 flags)
@@ -118,10 +135,10 @@ static void fill_elf_header(struct elfhdr *elf, int segs,
 	elf->e_phnum = segs;
 }
 
-
+static int capture = 0;
+static int in_replay = 0;
 
 static int cam_replay_dump(struct seq_file *s, void *unused) {
-	printk("start dumping..\n");
 	struct coredump_params *cprm = cb->cprm;
 	struct elfhdr elf;
 	Elf_Half e_phnum;
@@ -129,6 +146,7 @@ static int cam_replay_dump(struct seq_file *s, void *unused) {
 	int offset, dataoff, i;
 	int segs = cb->segs;
 
+	printk("start dumping elf...\n");
 	if (IS_ERR(cb->cprm->file)) {
 		printk("prev file open failed! try again..\n");
 		struct file *f = file_open("/tmp/msg_dump.elf", O_WRONLY | O_CREAT, 0644);
@@ -168,7 +186,7 @@ static int cam_replay_dump(struct seq_file *s, void *unused) {
 		/* lwg: XXX page aligned? */
 		phdr.p_memsz = cb->seg_bytes;
 		phdr.p_filesz = cb->seg_bytes;
-		phdr.p_flags = (PF_R|PF_W);
+		phdr.p_flags = cb->flags[i];
 		phdr.p_align = ELF_EXEC_PAGESIZE;
 		/* update offset */
 		offset += phdr.p_filesz;
@@ -189,26 +207,250 @@ static int cam_replay_dump(struct seq_file *s, void *unused) {
 			printk("fail to dump %d at stash! (size = %d)\n", i, cb->seg_bytes);
 		}
 	}
-
 	printk("finished dumping..\n");
 	return 0;
 }
+
+/* from binfmt_elf.c */
+static struct elf_phdr *load_elf_library(struct file *file, int *segs)
+{
+	struct elf_phdr *elf_phdata;
+	struct elf_phdr *eppnt;
+	int retval, error, i, j;
+	struct elfhdr elf_ex;
+	loff_t pos = 0;
+
+	printk("replaying from mem dump %s...\n", file->f_path.dentry->d_iname);
+	error = -ENOEXEC;
+	retval = kernel_read(file, &elf_ex, sizeof(elf_ex), &pos);
+	if (retval != sizeof(elf_ex)) {
+		printk("wrong hdr size..\n");
+		goto out;
+	}
+
+	if (memcmp(elf_ex.e_ident, ELFMAG, SELFMAG) != 0) {
+		printk("wrong magic..\n");
+		goto out;
+	}
+
+#if 0
+	/* First of all, some simple consistency checks */
+	if (elf_ex.e_type != ET_EXEC || elf_ex.e_phnum > 2 ||
+	    !elf_check_arch(&elf_ex) || !file->f_op->mmap)
+		goto out;
+#endif
+
+	/* Now read in all of the header information */
+
+	j = sizeof(struct elf_phdr) * elf_ex.e_phnum;
+	/* j < ELF_MIN_ALIGN because elf_ex.e_phnum <= 2 */
+
+	error = -ENOMEM;
+	elf_phdata = kmalloc(j, GFP_KERNEL);
+	if (!elf_phdata)
+		goto out;
+
+	eppnt = elf_phdata;
+	error = -ENOEXEC;
+	pos =  elf_ex.e_phoff;
+	/* read in all program headers */
+	retval = kernel_read(file, eppnt, j, &pos);
+	if (retval != j)
+		goto out;
+
+	/* iterate through headers */
+	for (j = 0, i = 0; i<elf_ex.e_phnum; i++) {
+		struct elf_phdr *phdr = (struct elf_phdr *)(eppnt + i);
+		if (phdr->p_type == PT_LOAD) {
+			/* lwg: dump program headers */
+			printk("seg[%d]:flag=%08x, size=%08x, off=%08x\n", i, phdr->p_flags, phdr->p_filesz, phdr->p_offset);
+			j++;
+		}
+	}
+out:
+	*segs = elf_ex.e_phnum;
+	return eppnt;
+}
+
+static inline int is_seg_req(struct elf_phdr *phdr) {
+	return (phdr->p_flags & 0x1);
+}
+
+static void *load_seg_mem(struct file *f, struct elf_phdr *phdr) {
+	void *tmp = replay->slot;
+	u64 offset = phdr->p_offset;
+	u64 size   = phdr->p_memsz;
+	int seg = phdr->p_offset/phdr->p_memsz;
+	if (!tmp) {
+		printk("slot mem does not exist!!\n");
+		return NULL;
+	}
+	if (kernel_read(f, tmp, size, &offset) != size) {
+		printk("cannot read in %x bytes of seg[%d] from dump!\n", size, seg);
+		return NULL;
+	}
+	return tmp;
+}
+
+/* get next req (req = 1) or reply (req = 0) */
+static int get_next(int req, int from, int end) {
+	int i;
+	for (i = from + 1; i < end; i++) {
+		struct elf_phdr *tmp = (struct elf_phdr *)(replay->head + i);
+		/* req == what we want to grab */
+		if (req == is_seg_req(tmp)) {
+			return i;
+		}
+	}
+	return -1;
+}
+
+/* are we expecting the next to be req or reply? */
+static int peek(int curr) {
+	int next;
+	struct elf_phdr *tmp;
+	/* the last seg */
+	if (curr == replay->segs) {
+		next = curr;
+	} else {
+		next = curr + 1;
+	}
+	tmp = (struct elf_phdr *)(replay->head + next);
+	return tmp->p_flags;
+}
+
+
+static int replay_trigger(int, int);
+static void wait_for_irq(void);
+
+static int start_replay(void) {
+	char *dump_file = "/tmp/msg_dump.elf";
+	struct file *f = filp_open(dump_file, O_RDONLY, 0666);
+	int segs, idx;
+	struct elf_phdr *head;
+	if (IS_ERR(f)) {
+		printk("cannot open dump file (%s)!\n", dump_file);
+		return 0;
+	}
+	head =  load_elf_library(f, &segs);
+	replay = kmalloc(sizeof(struct replay_cb), GFP_KERNEL);
+	replay->slot = slot_virt;
+	replay->dump = f;
+	replay->head = head;
+	/* two pointers, to req and reply respectively
+	 * first must be request */
+	replay->req_idx = 0;
+	replay->reply_idx = get_next(0, replay->req_idx, segs);
+	replay->segs = segs;
+	BUG_ON(replay->req_idx < 0);
+	BUG_ON(replay->reply_idx < 0);
+
+	/* sequentially load dumps */
+	idx = 0;
+	do {
+#if 0
+		if (idx == 42) {
+			/* skip buffer_from_host.. */
+			idx++;
+			continue;
+		}
+#endif 
+		struct elf_phdr *phdr = (struct elf_phdr *)(head + idx);
+		int type = phdr->p_flags;
+		switch (type) {
+			/* reply */
+			case 0x0:
+				break;
+			/* request */
+			case 0x1:
+				if (load_seg_mem(f, phdr) != NULL) {
+					printk("load %d onto slot mem %p, fire...\n", idx, replay->slot);
+				}
+				break;
+		}
+		/* need to redo */
+		if (replay_trigger(type, idx)) {
+			idx = replay->req_idx;
+			printk("re do %d\n", idx);
+			continue;
+		}
+		idx++;
+		msleep(100);
+		if (idx == 55) {
+			msleep(500);
+		}
+	} while (idx < segs);
+
+#if 0
+	do {
+		struct elf_phdr *phdr = (struct elf_phdr *)(head + idx);
+
+		if (load_seg_mem(f, phdr) != NULL) {
+			printk("load %d onto slot mem %p, fire...\n", idx, replay->slot);
+			replay_trigger();
+			wait_for_irq();
+			idx = get_next(1, idx, replay->segs);
+			replay->req_idx = idx;
+		}
+		idx++;
+	} while (idx != -1);
+#endif 
+
+	return 0;
+}
+
+int get_curr_cb_seg(void);
+int get_curr_cb_seg(void) {
+	return cb->segs;
+}
+EXPORT_SYMBOL(get_curr_cb_seg);
 
 
 static int cam_replay_open(struct inode *inode, struct file *file) {
 	return single_open(file, cam_replay_dump, NULL);
 }
 
+static ssize_t cam_replay_write(struct file* filp, const char * __user ubuf, size_t cnt, loff_t *pos) {
+	char buf[64];
+	int cmd, rv;
+	if (copy_from_user(&buf, ubuf, cnt)) {
+		return -EFAULT;
+	}
+	buf[cnt] = 0;
+	rv = kstrtoint(strstrip(buf), 10, &cmd);
+	if (rv < 0) {
+		return rv;
+	}
+	switch (cmd) {
+		/* turn on/off capture */
+		case 0:
+			capture = !capture;
+			printk("capture = %d\n", capture);
+			break;
+		/* start replay */
+		case 1:
+			in_replay = 1;
+			printk("start replaying....\n");
+			start_replay();
+			break;
+		default:
+			printk("unrecognized cmd %d...\n", cmd);
+			break;
+	}
+	*pos += cnt;
+	return cnt;
+}
+
 static const struct file_operations cam_replay_ops = {
 	.open = cam_replay_open,
+	.write = cam_replay_write,
 	.read = seq_read,
 	.llseek = seq_lseek,
 	.release = single_release,
 };
 
-
 /* reference impl in elf_core_dump */
-static void init_dump_cb(void *addr, size_t size) {
+static void init_dump_cb(const char *path, void *addr, size_t size) {
 	struct coredump_params *cparam;
 	struct file *f;
 	int i;
@@ -217,9 +459,7 @@ static void init_dump_cb(void *addr, size_t size) {
 	BUG_ON(!cparam);
 	BUG_ON(!cb);
 
-	/* lwg: compiled into kernel just directly use filp_open */
-	/*f = file_open("/tmp/msg_dump.elf", O_WRONLY | O_CREAT, 0644);*/
-	f = filp_open("/tmp/msg_dump.elf", O_WRONLY | O_CREAT, 0644);
+	f = filp_open(path, O_WRONLY | O_CREAT, 0644);
 	if (!f) {
 		printk("cannot create dump file!\n");
 		return;
@@ -240,19 +480,28 @@ static void init_dump_cb(void *addr, size_t size) {
 	cb->seg_bytes = size;
 	for (i = 0; i < MAX_SEGS; i++) {
 		cb->stash[i] = NULL;
+		cb->flags[i] = 0;
 	}
 	proc_create("cam_replay", 0, NULL, &cam_replay_ops);
 	printk("dump cb initialized...\n");
 	return 0;
 }
 
-static void take_snapshot(struct dump_cb *cb) {
+/* request: 1 = send request, 0 = reply in irq */
+static void take_snapshot(struct dump_cb *cb, int request) {
+	/* don't start capturing yet */
+	if (!capture) {
+		return;
+	}
 	BUG_ON(!cb);
 	/* lwg: by now wmb has been issued */
 	void *tmp = kvmalloc(cb->seg_bytes, GFP_KERNEL);
+	int seg = cb->segs;
 	memcpy(tmp, cb->slot_virt, cb->seg_bytes);
-	cb->stash[cb->segs++] = tmp;
+	cb->stash[seg] = tmp;
+	cb->flags[seg] = request;
 	printk("kacha! segs = %d\n", cb->segs);
+	cb->segs++;
 	return;
 }
 
@@ -282,6 +531,35 @@ static struct semaphore g_free_fragments_sema;
 static struct device *g_dev;
 
 extern int vchiq_arm_log_level;
+
+static int replay_trigger(int type, int idx) {
+	int max_retry = 300;
+	int try = 0;
+	switch (type) {
+		case 0x0:
+			/* wait for irq to catch up */
+			while(replay->reply_idx <= idx) {
+				dsb(sy);
+				mdelay(1);
+				try++;
+				if (try > max_retry) {
+					/* re-do trigger?? */
+					printk("re do trigger...\n");
+					writel(0, g_regs + BELL2);
+					return 1;
+				}
+			}
+			break;
+		case 0x1:
+			/* last sent req */
+			replay->req_idx = idx;
+			wmb();
+			dsb(sy);
+			writel(0, g_regs + BELL2);
+			break;
+	}
+	return 0;
+}
 
 static DEFINE_SEMAPHORE(g_free_fragments_mutex);
 
@@ -331,9 +609,34 @@ int vchiq_platform_init(struct platform_device *pdev, VCHIQ_STATE_T *state)
 	slot_mem_size = PAGE_ALIGN(TOTAL_SLOTS * VCHIQ_SLOT_SIZE);
 	frag_mem_size = PAGE_ALIGN(g_fragments_size * MAX_FRAGMENTS);
 
+	dma_addr_t tmp;
+	/* try to avoid val1 ??? */
+    void *tmp_virt = dma_alloc_coherent(dev, PAGE_ALIGN(0xa8c000), &tmp, GFP_KERNEL);
+	if (!tmp_virt) {
+		printk("fail to alloc tmp dma??\n");
+	}
 	/* lwg: of course its DMA address */
 	slot_mem = dmam_alloc_coherent(dev, slot_mem_size + frag_mem_size,
 				       &slot_phys, GFP_KERNEL);
+
+	dma_addr_t val1, val2;
+	/* size = 0xa8c000 */
+	val1 = 0xf7060000;
+	/* size = 0x8 */
+	val2 = 0xf7056000;
+	/* check slot mem covered by rx mem or not */
+	if ((slot_phys > val1 + 0xa8c000) || ((slot_phys + slot_mem_size + frag_mem_size) < val1)) {
+		printk("no intersect with %08x\n", val1);
+	} else {
+		printk("val1 = %08x, slot_mem = %08x may intersect!\n", val1, slot_phys);
+	}
+
+	if ((slot_phys > val2 + 0x8) || ((slot_phys + slot_mem_size + frag_mem_size) < val2)) {
+		printk("no intersect with %08x\n", val2);
+	} else {
+		printk("val2 = %08x, slot_mem = %08x may inersect!\n", val2, slot_phys);
+	}
+
 	if (!slot_mem) {
 		dev_err(dev, "could not allocate DMA memory\n");
 		return -ENOMEM;
@@ -387,7 +690,7 @@ int vchiq_platform_init(struct platform_device *pdev, VCHIQ_STATE_T *state)
 	/* lwg: set up dump control block before first irq  */
 	slot_virt = slot_mem;
 	slot_dump_size = slot_mem_size;
-	init_dump_cb(slot_mem, slot_mem_size + frag_mem_size);
+	init_dump_cb("/tmp/msg_dump.elf", slot_mem, slot_mem_size + frag_mem_size);
 
 	/* Send the base address of the slots to VideoCore
 	 * lwg: ha! */
@@ -446,9 +749,8 @@ remote_event_signal(REMOTE_EVENT_T *event)
 
 	dsb(sy);         /* data barrier operation */
 
-
 	/* record into tmp memory first */
-	take_snapshot(cb);
+	take_snapshot(cb, 1);
 
 	if (event->armed) {
 		writel(0, g_regs + BELL2); /* trigger vc interrupt */
@@ -474,6 +776,7 @@ vchiq_prepare_bulk_data(VCHIQ_BULK_T *bulk, VCHI_MEM_HANDLE_T memhandle,
 		return VCHIQ_ERROR;
 
 	bulk->handle = memhandle;
+	/* lwg: for rx */
 	bulk->data = (void *)(unsigned long)pagelistinfo->dma_addr;
 
 	/*
@@ -561,6 +864,32 @@ vchiq_platform_handle_timeout(VCHIQ_STATE_T *state)
  * Local functions
  */
 
+
+static void handle_replay_irq(void) {
+	u64 size, off;
+	int ret, idx;
+	idx = replay->reply_idx;
+	struct elf_phdr *phdr = (struct elf_phdr *)(replay->head + idx);
+	size = phdr->p_memsz;
+	off = phdr->p_offset;
+	void *buf = kvmalloc(size, GFP_KERNEL);
+	if (kernel_read(replay->dump, buf, size, &off) != size) {
+		printk("%s:cannot read in %08x bytes from %08x into buf!\n", __func__, size, off);
+		goto out;
+	}
+	wmb();
+	dsb(sy);
+	ret = memcmp(cb->slot_virt, buf, size);
+	printk("cmp two mem dump...ret = %d, seg = %d\n", ret, idx);
+	/* update */
+	replay->reply_idx = get_next(0, idx, replay->segs);
+	wmb();
+	dsb(sy);
+out:
+	kfree(buf);
+	return;
+}
+
 static irqreturn_t
 vchiq_doorbell_irq(int irq, void *dev_id)
 {
@@ -571,11 +900,18 @@ vchiq_doorbell_irq(int irq, void *dev_id)
 	/* Read (and clear) the doorbell */
 	status = readl(g_regs + BELL0);
 	printk("lwg:%s:%d:read %08x from BELL0\n", __func__, __LINE__, status);
+	/* replay irq handling path */
+	if (in_replay) {
+		handle_replay_irq();
+		ret = IRQ_HANDLED;
+		return ret;
+	}
 
 	/* record upon irq */
-	take_snapshot(cb);
+	take_snapshot(cb, 0);
 
 	if (status & 0x4) {  /* Was the doorbell rung? */
+		/* notify the slot handler thread */
 		remote_event_pollall(state);
 		ret = IRQ_HANDLED;
 	}

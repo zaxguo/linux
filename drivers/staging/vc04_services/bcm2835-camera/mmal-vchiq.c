@@ -27,6 +27,10 @@
 #include <linux/btree.h>
 #include <asm/cacheflush.h>
 #include <media/videobuf2-vmalloc.h>
+/* coredump */
+#include <linux/coredump.h>
+#include <linux/elf.h>
+#include <linux/binfmts.h>
 
 #include "mmal-common.h"
 #include "mmal-vchiq.h"
@@ -41,6 +45,46 @@
 /* defined by -D */
 #define DEBUG
 #define FULL_MSG_DUMP 1
+
+
+extern int get_curr_cb_seg(void);
+
+enum DUMP_MSG_TYPE {
+	MMAL_PORT,
+	MMAL_COMPONENT,
+};
+
+#define MAX_MSG_CTX	100
+
+/* lwg: the assumption is each snapshot there's at most 1 msg context */
+struct dump_msg_ctx {
+	/* which snapshot this context belongs to
+	 * assigned by cb->seg of the snapshot */
+	u32 seg;
+	/* must be of the following:
+	 * 1) mmal_port
+	 * 2) vchiq_mmal_component
+	 * */
+	u32 type;
+	/* size of the _data_ (e.g. sizeof(struct mmal_port)) */
+	u32 size;
+	/* pointer to the copied temporary data */
+	void *data;
+};
+
+struct mmal_dump_cb {
+	struct coredump_params *cprm;
+	/* how many ctx we have */
+	int segs;
+	/* point to ctx */
+	void *contexts[MAX_MSG_CTX];
+};
+
+static void hex_dump(const char *header, void *addr, int size) {
+	print_hex_dump(KERN_WARNING, header, DUMP_PREFIX_OFFSET,
+				16, 4, addr, size, 1);
+}
+
 
 #ifdef DEBUG
 static const char *const msg_type_names[] = {
@@ -490,6 +534,7 @@ static int inline_receive(struct vchiq_mmal_instance *instance,
 	return 0;
 }
 
+/* buffer availability -- just to prepare the RX.. ??? */
 /* queue the buffer availability with MMAL_MSG_TYPE_BUFFER_FROM_HOST */
 static int
 buffer_from_host(struct vchiq_mmal_instance *instance,
@@ -543,11 +588,11 @@ buffer_from_host(struct vchiq_mmal_instance *instance,
 	 * allocated by vmalloc_user(...) -- how can VC access this address? */
 	m.u.buffer_from_host.buffer_header.data =
 		(u32)(unsigned long)buf->buffer;
-
 	if (is_vmalloc_addr(buf->buffer)) {
 		printk("lwg:%s:%d:tamper this passed vmalloc value (%p)!!!\n", __func__, __LINE__, buf->buffer);
-		m.u.buffer_from_host.buffer_header.data = 0xdeadbeef;
-		/* lwg: does not seem to affect execution results! */
+		/* lwg: does not seem to affect execution results!
+		 * but will mess up with vb2 states!  */
+		/*m.u.buffer_from_host.buffer_header.data = 0xdeadbeef;*/
 	} else {
 		/* dump some info */
 		printk("lwg:%s:%d:phys addr of buffer = %08x, size = %08x\n", __func__, __LINE__, virt_to_phys(buf->buffer), buf->buffer_size);
@@ -572,7 +617,7 @@ buffer_from_host(struct vchiq_mmal_instance *instance,
 	vchi_service_use(instance->handle);
 
 	/* lwg: complete dbg */
-	DBG_DUMP_MSG(&m, (sizeof(struct mmal_msg_header) + sizeof(m.u.buffer_from_host)), ">>> sync message");
+	DBG_DUMP_MSG(&m, (sizeof(struct mmal_msg_header) + sizeof(m.u.buffer_from_host)), ">>> message");
 
 
 	ret = vchi_queue_kernel_message(instance->handle,
@@ -982,8 +1027,10 @@ static void port_to_mmal_msg(struct vchiq_mmal_port *port, struct mmal_port *p)
 	p->buffer_size = port->current_buffer.size;
 	/* lwg: XXX: annotate:
 	 * kernel addr is linearly mapped, can directly take out lower 4B as paddr */
-	p->userdata = (u32)(unsigned long)port;
-	printk("lwg:%s:%d:phys addr of port = %08x, virt = %p\n", __func__, __LINE__, virt_to_phys(port), port);
+	/*p->userdata = (u32)(unsigned long)port;*/
+	p->userdata = (u32)(unsigned long)0xdeadbeef;
+	printk("lwg:%s:%d:phys addr of port = %08x (%p), seg = %d\n", __func__, __LINE__, virt_to_phys(port), port, offsetof(struct mmal_port, userdata), get_curr_cb_seg());
+	/*hex_dump("port:", port, sizeof(struct vchiq_mmal_port));*/
 }
 
 static int port_info_set(struct vchiq_mmal_instance *instance,
@@ -1161,6 +1208,8 @@ static int create_component(struct vchiq_mmal_instance *instance,
 	m.h.type = MMAL_MSG_TYPE_COMPONENT_CREATE;
 	/* lwg: XXX: annotate */
 	m.u.component_create.client_component = (u32)(unsigned long)component;
+	printk("lwg:%s:%d:phys addr of component = %08x (%p)\n", __func__, __LINE__, virt_to_phys(component), component);
+	/*hex_dump("component:", component, sizeof(struct vchiq_mmal_component));*/
 	strncpy(m.u.component_create.name, name,
 		sizeof(m.u.component_create.name));
 
@@ -1521,7 +1570,7 @@ static int port_parameter_get(struct vchiq_mmal_instance *instance,
 		       *value_size);
 		*value_size = rmsg->u.port_parameter_get_reply.size;
 	} else
-		/* lwg: only value will be extracted */
+		/* lwg: only value will be extracted (as timestamp) */
 		memcpy(value, &rmsg->u.port_parameter_get_reply.value,
 		       rmsg->u.port_parameter_get_reply.size);
 

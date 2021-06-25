@@ -1040,6 +1040,14 @@ queue_message(VCHIQ_STATE_T *state, VCHIQ_SERVICE_T *service,
 	header->msgid = msgid;
 	header->size = size;
 
+	/* lwg: dump msg RX */
+	if (type == VCHIQ_MSG_BULK_RX) {
+		print_hex_dump(KERN_DEBUG, "<<rx_h:", DUMP_PREFIX_OFFSET,
+				16, 4, header, sizeof(VCHIQ_HEADER_T), 1);
+		print_hex_dump(KERN_DEBUG, "<<rx_p:", DUMP_PREFIX_OFFSET,
+				16, 4, header->data, size, 1);
+	}
+
 	{
 		int svc_fourcc;
 
