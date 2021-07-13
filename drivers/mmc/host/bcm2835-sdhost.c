@@ -158,6 +158,8 @@
 int in_replay;
 EXPORT_SYMBOL(in_replay);
 
+static int record = 0;
+
 uint32_t *dma_data, *dma_data2, *dma_data3, *dma_data4;
 
 
@@ -369,14 +371,18 @@ static const char* get_reg_name(int reg) {
 
 static inline void bcm2835_sdhost_write(struct bcm2835_host *host, u32 val, int reg)
 {
-	/*trace_printk("write:%s:%08x\n", get_reg_name(reg), val);*/
+	if (record) {
+		trace_printk("write:%s:%08x\n", get_reg_name(reg), val);
+	}
 	writel(val, host->ioaddr + reg);
 }
 
 static inline u32 bcm2835_sdhost_read(struct bcm2835_host *host, int reg)
 {
 	u32 val = readl(host->ioaddr + reg);
-	/*trace_printk("read:%s:%08x\n", get_reg_name(reg), val);*/
+	if (record) {
+		trace_printk("read:%s:%08x\n", get_reg_name(reg), val);
+	}
 	return val;
 }
 
@@ -2504,6 +2510,7 @@ static const struct file_operations mmc_replay_ops = {
 
 static int bcm2835_sdhost_probe(struct platform_device *pdev)
 {
+	/*record = 1;*/
 	trace_printk("probe start\n");
 	struct device *dev = &pdev->dev;
 	struct device_node *node = dev->of_node;
@@ -2630,6 +2637,7 @@ static int bcm2835_sdhost_probe(struct platform_device *pdev)
 			      &msg, sizeof(msg));
 
 	host->firmware_sets_cdiv = (msg[1] != ~0);
+	printk("lwg:firmware sets cdiv = %d\n", host->firmware_sets_cdiv);
 
 	ret = bcm2835_sdhost_add_host(host);
 	if (ret)
@@ -2646,7 +2654,8 @@ static int bcm2835_sdhost_probe(struct platform_device *pdev)
 
 	my_host = host;
 	printk("setting %p to procfs\n", host);
-
+	/* control trace_printk */
+	record = 0;
 	return 0;
 
 err:

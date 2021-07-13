@@ -145,7 +145,7 @@ int32_t dwc_otg_hcd_handle_intr(dwc_otg_hcd_t * dwc_otg_hcd)
 #endif
 		hfnum.d32 = DWC_READ_REG32(&dwc_otg_hcd->core_if->host_if->host_global_regs->hfnum);
 		if (gintsts.b.sofintr) {
-			/*trace_printk("sof.\n");*/
+			trace_printk("sof.\n");
 			retval |= dwc_otg_hcd_handle_sof_intr(dwc_otg_hcd);
 		}
 
@@ -356,6 +356,7 @@ int32_t dwc_otg_hcd_handle_sof_intr(dwc_otg_hcd_t * hcd)
 
 	/* Clear interrupt - but do not trample on the FIQ sof */
 	if (!fiq_fsm_enable) {
+		/* lwg: xxx?? comment out to not clear sof?  */
 		gintsts.b.sofintr = 1;
 		DWC_WRITE_REG32(&hcd->core_if->core_global_regs->gintsts, gintsts.d32);
 	}

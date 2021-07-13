@@ -512,6 +512,8 @@ static int start_streaming(struct vb2_queue *vq, unsigned int count)
 		return -EINVAL;
 	}
 
+	printk("format = %s\n", dev->capture.fmt->name);
+
 	/*init_completion(&dev->capture.frame_cmplt); */
 
 	/* enable frame capture */

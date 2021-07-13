@@ -41,8 +41,11 @@
 
 typedef struct pagelist_struct {
 	u32 length;
+	/* lwg: type = 1 = PAGELIST_READ = DMA_FROM_DEVICE
+	 * READ from VideoCore, i.e. RX */
 	u16 type;
 	u16 offset;
+	/* lwg: if there is none at consecutive address -- 12 LSBs == 0, */
 	u32 addrs[1];	/* N.B. 12 LSBs hold the number
 			 * of following pages at consecutive
 			 * addresses.

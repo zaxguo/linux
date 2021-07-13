@@ -694,8 +694,10 @@ int dwc_otg_hcd_qh_add(dwc_otg_hcd_t * hcd, dwc_otg_qh_t * qh)
 		if ( !hcd->periodic_qh_count ) {
 			/* liwei: okay to turn off??
 			 * confirmed -- ISO devices rely on sofintr */
+			/* lwg: comment out the following line to turn off sof
+			 * intr_mask.b.sofintr = 1 ==> turn on sof  */
 
-			intr_mask.b.sofintr = 1;
+			/*intr_mask.b.sofintr = 1;*/
 			if (fiq_enable) {
 				local_fiq_disable();
 				fiq_fsm_spin_lock(&hcd->fiq_state->lock);

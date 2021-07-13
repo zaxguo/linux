@@ -1042,6 +1042,11 @@ queue_message(VCHIQ_STATE_T *state, VCHIQ_SERVICE_T *service,
 
 	/* lwg: dump msg RX */
 	if (type == VCHIQ_MSG_BULK_RX) {
+		/* tamper with rx data size to see what will happen */
+		/* int *tmp = (int *)(header->data + 1);*/
+		/* *tmp = *tmp - 100;*/
+		/* lwg: non-matching sizes from buffer_to_host vs bulk_rx will cause VC to abort transmission!!! */
+
 		print_hex_dump(KERN_DEBUG, "<<rx_h:", DUMP_PREFIX_OFFSET,
 				16, 4, header, sizeof(VCHIQ_HEADER_T), 1);
 		print_hex_dump(KERN_DEBUG, "<<rx_p:", DUMP_PREFIX_OFFSET,
@@ -1297,6 +1302,7 @@ notify_bulks(VCHIQ_SERVICE_T *service, VCHIQ_BULK_QUEUE_T *queue,
 			/* Only generate callbacks for non-dummy bulk
 			** requests, and non-terminated services */
 			if (bulk->data && service->instance) {
+
 				if (bulk->actual != VCHIQ_BULK_ACTUAL_ABORTED) {
 					if (bulk->dir == VCHIQ_BULK_TRANSMIT) {
 						VCHIQ_SERVICE_STATS_INC(service,
@@ -1349,6 +1355,7 @@ notify_bulks(VCHIQ_SERVICE_T *service, VCHIQ_BULK_QUEUE_T *queue,
 		}
 		if (!retry_poll)
 			status = VCHIQ_SUCCESS;
+
 	}
 
 	if (status == VCHIQ_RETRY)
@@ -1814,10 +1821,11 @@ parse_rx_slots(VCHIQ_STATE_T *state)
 				: VCHIQ_MAKE_FOURCC('?', '?', '?', '?');
 			vchiq_log_info(SRVTRACE_LEVEL(service),
 				"Rcvd Msg %s(%u) from %c%c%c%c s:%d d:%d "
-				"len:%d",
+				"len:%d, rx_pos:%d",
 				msg_type_str(type), type,
 				VCHIQ_FOURCC_AS_4CHARS(svc_fourcc),
-				remoteport, localport, size);
+				remoteport, localport, size,
+				state->rx_pos);
 			if (size > 0)
 				vchiq_log_dump_mem("Rcvd", 0, header->data,
 					min(16, size));
@@ -3345,7 +3353,7 @@ vchiq_remove_service(VCHIQ_SERVICE_HANDLE_T handle)
  * When called in blocking mode, the userdata field points to a bulk_waiter
  * structure.
  */
-/* lwg: investigate */
+/* lwg: investigate -- offset = data dst?? */
 VCHIQ_STATUS_T
 vchiq_bulk_transfer(VCHIQ_SERVICE_HANDLE_T handle,
 	VCHI_MEM_HANDLE_T memhandle, void *offset, int size, void *userdata,

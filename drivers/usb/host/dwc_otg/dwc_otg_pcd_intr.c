@@ -5067,6 +5067,7 @@ int32_t dwc_otg_pcd_handle_intr(dwc_otg_pcd_t * pcd)
 			    __func__, gintr_status.d32);
 
 		if (gintr_status.b.sofintr) {
+			trace_printk("sof.\n");
 			retval |= dwc_otg_pcd_handle_sof_intr(pcd);
 		}
 		if (gintr_status.b.rxstsqlvl) {

@@ -1,0 +1,52 @@
+interface/vchiq_arm/vchiq_2835_arm.c:	bulk->handle = memhandle;
+interface/vchiq_arm/vchiq_2835_arm.c:	bulk->data = (void *)(unsigned long)pagelistinfo->dma_addr;
+interface/vchiq_arm/vchiq_2835_arm.c:	bulk->remote_data = pagelistinfo;
+interface/vchiq_arm/vchiq_2835_arm.c:	if (bulk && bulk->remote_data && bulk->actual)
+interface/vchiq_arm/vchiq_2835_arm.c:		free_pagelist((struct vchiq_pagelist_info *)bulk->remote_data,
+interface/vchiq_arm/vchiq_2835_arm.c:			      bulk->actual);
+interface/vchiq_arm/vchiq_kern_lib.c:			if ((bulk->data != data) ||
+interface/vchiq_arm/vchiq_kern_lib.c:				(bulk->size != size)) {
+interface/vchiq_arm/vchiq_kern_lib.c:				bulk->userdata = NULL;
+interface/vchiq_arm/vchiq_kern_lib.c:			bulk->userdata = NULL;
+interface/vchiq_arm/vchiq_arm.c:				waiter->bulk_waiter.bulk->userdata = NULL;
+interface/vchiq_arm/vchiq_core.c:			int msgtype = (bulk->dir == VCHIQ_BULK_TRANSMIT) ?
+interface/vchiq_arm/vchiq_core.c:			if (bulk->remote_data) {
+interface/vchiq_arm/vchiq_core.c:						&bulk->actual,
+interface/vchiq_arm/vchiq_core.c:			if (bulk->data && service->instance) {
+interface/vchiq_arm/vchiq_core.c:				if (bulk->actual != VCHIQ_BULK_ACTUAL_ABORTED) {
+interface/vchiq_arm/vchiq_core.c:					if (bulk->dir == VCHIQ_BULK_TRANSMIT) {
+interface/vchiq_arm/vchiq_core.c:							bulk->actual);
+interface/vchiq_arm/vchiq_core.c:							bulk->actual);
+interface/vchiq_arm/vchiq_core.c:				if (bulk->mode == VCHIQ_BULK_MODE_BLOCKING) {
+interface/vchiq_arm/vchiq_core.c:					waiter = bulk->userdata;
+interface/vchiq_arm/vchiq_core.c:						waiter->actual = bulk->actual;
+interface/vchiq_arm/vchiq_core.c:				} else if (bulk->mode ==
+interface/vchiq_arm/vchiq_core.c:					VCHIQ_REASON_T reason = (bulk->dir ==
+interface/vchiq_arm/vchiq_core.c:						((bulk->actual ==
+interface/vchiq_arm/vchiq_core.c:						((bulk->actual ==
+interface/vchiq_arm/vchiq_core.c:						reason,	NULL, bulk->userdata);
+interface/vchiq_arm/vchiq_core.c:			if (bulk->actual != VCHIQ_BULK_ACTUAL_ABORTED)
+interface/vchiq_arm/vchiq_core.c:					service->remoteport, bulk->size,
+interface/vchiq_arm/vchiq_core.c:					bulk->data, bulk->remote_data);
+interface/vchiq_arm/vchiq_core.c:					bulk->size, bulk->remote_size,
+interface/vchiq_arm/vchiq_core.c:					bulk->data, bulk->remote_data);
+interface/vchiq_arm/vchiq_core.c:			bulk->remote_data = NULL;
+interface/vchiq_arm/vchiq_core.c:			bulk->remote_size = 0;
+interface/vchiq_arm/vchiq_core.c:				bulk->size,
+interface/vchiq_arm/vchiq_core.c:				bulk->remote_size);
+interface/vchiq_arm/vchiq_core.c:			bulk->data = NULL;
+interface/vchiq_arm/vchiq_core.c:			bulk->size = 0;
+interface/vchiq_arm/vchiq_core.c:			bulk->actual = VCHIQ_BULK_ACTUAL_ABORTED;
+interface/vchiq_arm/vchiq_core.c:			bulk->dir = is_tx ? VCHIQ_BULK_TRANSMIT :
+interface/vchiq_arm/vchiq_core.c:				bulk->remote_data =
+interface/vchiq_arm/vchiq_core.c:				bulk->remote_size = ((int *)header->data)[1];
+interface/vchiq_arm/vchiq_core.c:					bulk->remote_size, bulk->remote_data);
+interface/vchiq_arm/vchiq_core.c:				bulk->actual = *(int *)header->data;
+interface/vchiq_arm/vchiq_core.c:					bulk->actual, bulk->data);
+interface/vchiq_arm/vchiq_core.c:	bulk->mode = mode;
+interface/vchiq_arm/vchiq_core.c:	bulk->dir = dir;
+interface/vchiq_arm/vchiq_core.c:	bulk->userdata = userdata;
+interface/vchiq_arm/vchiq_core.c:	bulk->size = size;
+interface/vchiq_arm/vchiq_core.c:	bulk->actual = VCHIQ_BULK_ACTUAL_ABORTED;
+interface/vchiq_arm/vchiq_core.c:		size, bulk->data, userdata);
+interface/vchiq_arm/vchiq_core.c:		int payload[2] = { (int)(long)bulk->data, bulk->size };

@@ -46,8 +46,7 @@ static void *vb2_vmalloc_alloc(struct device *dev, unsigned long attrs,
 
 	buf->size = size;
 	buf->vaddr = vmalloc_user(buf->size);
-	printk("lwg:%s:%d:alloc %d @ %p(pfn %08x)\n", __func__,__LINE__, buf->size,
-			buf->vaddr, vmalloc_to_pfn(buf->vaddr));
+	/*printk("lwg:%s:%d:alloc %d @ %p(pfn %08x)\n", __func__,__LINE__, buf->size,buf->vaddr, vmalloc_to_pfn(buf->vaddr));*/
 	buf->dma_dir = dma_dir;
 	buf->handler.refcount = &buf->refcount;
 	buf->handler.put = vb2_vmalloc_put;

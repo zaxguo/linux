@@ -97,6 +97,8 @@ int slot_dump_size;
 struct dump_cb* cb;
 struct replay_cb *replay;
 
+static void handle_replay_irq(void);
+
 static struct file* file_open(const char *path, int flags, int rights) {
 	struct file *filp = NULL;
 	mm_segment_t oldfs;
@@ -137,6 +139,7 @@ static void fill_elf_header(struct elfhdr *elf, int segs,
 
 static int capture = 0;
 static int in_replay = 0;
+static void *g_pagelist;
 
 static int cam_replay_dump(struct seq_file *s, void *unused) {
 	struct coredump_params *cprm = cb->cprm;
@@ -322,6 +325,7 @@ static int peek(int curr) {
 
 static int replay_trigger(int, int);
 static void wait_for_irq(void);
+static void *alloc_pagelist(int size);
 
 static int start_replay(void) {
 	char *dump_file = "/tmp/msg_dump.elf";
@@ -348,13 +352,6 @@ static int start_replay(void) {
 	/* sequentially load dumps */
 	idx = 0;
 	do {
-#if 0
-		if (idx == 42) {
-			/* skip buffer_from_host.. */
-			idx++;
-			continue;
-		}
-#endif 
 		struct elf_phdr *phdr = (struct elf_phdr *)(head + idx);
 		int type = phdr->p_flags;
 		switch (type) {
@@ -531,10 +528,231 @@ static struct semaphore g_free_fragments_sema;
 static struct device *g_dev;
 
 extern int vchiq_arm_log_level;
+static void peek_dma_buf(void);
+
+static int* search_page_reverse(int target, void *virt, int size) {
+	int k;
+	/* search per 4Byte */
+	for (k = 4; k < size; k += sizeof(target)) {
+		int *tmp = (int *)(virt - k);
+		if (*tmp == target) {
+			int size = *(tmp + 1);
+			printk("found magic %08x, size = %08x!!\n", target, size);
+			return tmp;
+		}
+	}
+	return 0;
+}
+
+static int *search_message(int magic, int type, void *virt, int size) {
+	int k;
+	for (k = 0; k < size; k += sizeof(magic)) {
+		/* dirty */
+		int *tmp = (int *)(virt + k);
+		int *cxt = tmp + 1;
+		if (*tmp == magic) {
+			printk("found magic, cxt = %08x\n", *cxt);
+			if (*cxt == type) {
+				print_hex_dump(KERN_WARNING, "search: ",DUMP_PREFIX_OFFSET, 16, 4, tmp, 256, 0);
+				return tmp;
+			}
+		}
+	}
+	return NULL;
+}
+
+int rx_size = 0;
+
+static void peek_dma_buf() {
+	struct vchiq_pagelist_info *pagelistinfo;
+	struct page **pages;
+	u32 *addrs;
+	/* hardcoded */
+	struct scatterlist *scatterlist;
+	PAGELIST_T *pagelist = g_pagelist;
+	int num_pages = DIV_ROUND_UP(rx_size, PAGE_SIZE);
+	addrs	= pagelist->addrs;
+	pages		= (struct page **)(addrs + num_pages);
+	scatterlist	= (struct scatterlist *)(pages + num_pages);
+	pagelistinfo	= (struct vchiq_pagelist_info *)
+			  (scatterlist + num_pages);
+
+	/* first page */
+	int i = 0;
+	int found = 0;
+	for (i = 0; i < num_pages; i++) {
+		struct page *page = pages[i];
+		void *dat = page_to_virt(page);
+		int ret = 0;
+		if (i == 0) {
+			printk("dumping 128 Bytes of first page..\n");
+			print_hex_dump(KERN_WARNING, "page: ",DUMP_PREFIX_OFFSET, 16, 4, dat, 128, 1);
+		}
+	}
+	if (found) {
+		printk("found jpg magci!!\n");
+	} else {
+		printk("did not found jpg magci!!\n");
+	}
+	return;
+}
+
+
+static void *alloc_pagelist(int size) {
+	PAGELIST_T *pagelist;
+	struct vchiq_pagelist_info *pagelistinfo;
+	struct page **pages;
+	u32 *addrs;
+	unsigned int num_pages, offset, i, k;
+	int actual_pages, type;
+	size_t pagelist_size;
+	struct scatterlist *scatterlist, *sg;
+	int dma_buffers;
+	dma_addr_t dma_addr;
+	/* extracted from recording */
+	/*int count = 0xa8c000;*/
+	int count = size;
+	offset = 0;
+	type = PAGELIST_READ;
+
+	num_pages = DIV_ROUND_UP(count + offset, PAGE_SIZE);
+
+	pagelist_size = sizeof(PAGELIST_T) +
+			(num_pages * sizeof(u32)) +
+			(num_pages * sizeof(pages[0]) +
+			(num_pages * sizeof(struct scatterlist))) +
+			sizeof(struct vchiq_pagelist_info);
+
+	/* Allocate enough storage to hold the page pointers and the page
+	** list
+	*/
+	pagelist = dma_zalloc_coherent(g_dev,
+				       pagelist_size,
+				       &dma_addr,
+				       GFP_KERNEL);
+
+	if (!pagelist)
+		return NULL;
+	/* lwg: addrs to addrs + num_pages stores all dma addr of pages!
+	 * after that stores pointer to `struct page *', etc. for driver to keep track of */
+	addrs	= pagelist->addrs;
+	pages		= (struct page **)(addrs + num_pages);
+	scatterlist	= (struct scatterlist *)(pages + num_pages);
+	pagelistinfo	= (struct vchiq_pagelist_info *)
+			  (scatterlist + num_pages);
+
+	pagelist->length = count;
+	pagelist->type = type;
+	pagelist->offset = offset;
+
+	/* Populate the fields of the pagelistinfo structure */
+	pagelistinfo->pagelist = pagelist;
+	pagelistinfo->pagelist_buffer_size = pagelist_size;
+	pagelistinfo->dma_addr = dma_addr;
+	pagelistinfo->dma_dir =  (type == PAGELIST_WRITE) ?
+				  DMA_TO_DEVICE : DMA_FROM_DEVICE;
+	pagelistinfo->num_pages = num_pages;
+	pagelistinfo->pages_need_release = 0;
+	pagelistinfo->pages = pages;
+	pagelistinfo->scatterlist = scatterlist;
+	pagelistinfo->scatterlist_mapped = 0;
+
+	printk("alloc pagelist at %08x, num_pages = %d\n", dma_addr, num_pages);
+
+	/*void *buf = kvmalloc(count, GFP_KERNEL);*/
+	void *buf = vmalloc(count);
+	if (IS_ERR(buf)) {
+		printk("cannot allocate %08x buf!\n", count);
+		goto out;
+	}
+	unsigned long length = count;
+	unsigned int off = offset;
+
+	for (actual_pages = 0; actual_pages < num_pages;
+		 actual_pages++) {
+		struct page *pg = vmalloc_to_page(buf + (actual_pages *
+							 PAGE_SIZE));
+		size_t bytes = PAGE_SIZE - off;
+
+		if (!pg) {
+			printk("cannot grab page when actual_page = %d\n", actual_pages);
+			return NULL;
+		}
+
+		if (bytes > length)
+			bytes = length;
+		pages[actual_pages] = pg;
+		length -= bytes;
+		off = 0;
+	}
+
+	if (actual_pages != num_pages) {
+		printk("cannot grab enough pages for rx!! (%d != %d)\n", actual_pages, num_pages);
+		goto out;
+	}
+
+
+	sg_init_table(scatterlist, num_pages);
+	/* Now set the pages for each scatterlist */
+	for (i = 0; i < num_pages; i++)	{
+		unsigned int len = PAGE_SIZE - offset;
+
+		if (len > count)
+			len = count;
+		sg_set_page(scatterlist + i, pages[i], len, offset);
+		offset = 0;
+		count -= len;
+	}
+
+	dma_buffers = dma_map_sg(g_dev,
+				 scatterlist,
+				 num_pages,
+				 pagelistinfo->dma_dir);
+
+	if (dma_buffers != num_pages) {
+		printk("cannot alloc enough DMA pages (%d != %d)!???\n", dma_buffers, num_pages);
+	}
+
+	printk("fill out rx buffer...\n");
+	k = 0;
+	for_each_sg(scatterlist, sg, dma_buffers, i) {
+		u32 len = sg_dma_len(sg);
+		u32 addr = sg_dma_address(sg);
+		addrs[k++] = (addr & PAGE_MASK) |
+				(((len + PAGE_SIZE - 1) >> PAGE_SHIFT) - 1);
+	}
+	printk("done!\n");
+	g_pagelist = pagelist;
+out:
+	return pagelist;
+}
+
+
+
 
 static int replay_trigger(int type, int idx) {
-	int max_retry = 300;
+	int max_retry = 2000;
 	int try = 0;
+
+	/* bulk_rx */
+	if (idx == 99) {
+		int *size = search_page_reverse(0xf7058000, replay->slot + slot_dump_size, slot_dump_size);
+		if (size) {
+			/* modify size of bulk_rx */
+			*(size + 1) = rx_size;
+			print_hex_dump(KERN_WARNING, "search: ",DUMP_PREFIX_OFFSET, 16, 4, size, 48, 0);
+		} else {
+			printk("did not find magic number!!!! should abort!\n");
+			return;
+		}
+
+	}
+
+	/* hardcoded, after bulk rx done */
+	if (idx == 101) {
+		peek_dma_buf();
+	}
+
 	switch (type) {
 		case 0x0:
 			/* wait for irq to catch up */
@@ -544,9 +762,22 @@ static int replay_trigger(int type, int idx) {
 				try++;
 				if (try > max_retry) {
 					/* re-do trigger?? */
-					printk("re do trigger...\n");
-					writel(0, g_regs + BELL2);
-					return 1;
+					printk("max out...!! continue or re do prev req??...\n");
+					handle_replay_irq();
+					return 0;
+				}
+			}
+			/* buffer_to_host */
+			if (idx == 98) {
+				int *head = search_message(0x6c616d6d, 0xc, replay->slot, slot_dump_size);
+				/* on-demand mem alloc */
+				if (head) {
+					rx_size = *(head + 19);
+					printk("rx size = %08x\n", rx_size);
+					PAGELIST_T *pg = alloc_pagelist(rx_size);
+				} else {
+					printk("did not find magic number!!!! should abort!\n");
+					return;
 				}
 			}
 			break;
@@ -609,15 +840,23 @@ int vchiq_platform_init(struct platform_device *pdev, VCHIQ_STATE_T *state)
 	slot_mem_size = PAGE_ALIGN(TOTAL_SLOTS * VCHIQ_SLOT_SIZE);
 	frag_mem_size = PAGE_ALIGN(g_fragments_size * MAX_FRAGMENTS);
 
+#if 0
 	dma_addr_t tmp;
 	/* try to avoid val1 ??? */
-    void *tmp_virt = dma_alloc_coherent(dev, PAGE_ALIGN(0xa8c000), &tmp, GFP_KERNEL);
+	int size = slot_mem_size+frag_mem_size;
+    void *tmp_virt = dma_alloc_coherent(dev, size, &tmp, GFP_KERNEL);
 	if (!tmp_virt) {
-		printk("fail to alloc tmp dma??\n");
+		printk("fail to alloc %08x of tmp dma??\n", PAGE_ALIGN(0xa8c000));
+	} else {
+		printk("alloc %08x at %08x\n", size, tmp);
 	}
+#endif
+
 	/* lwg: of course its DMA address */
 	slot_mem = dmam_alloc_coherent(dev, slot_mem_size + frag_mem_size,
 				       &slot_phys, GFP_KERNEL);
+
+	printk("slot dma phys = %08x, phys = %08x, virt = %p, real_virt = %p\n", slot_phys, dma_to_phys(dev, slot_phys), phys_to_virt(dma_to_phys(dev, slot_phys)), slot_mem);
 
 	dma_addr_t val1, val2;
 	/* size = 0xa8c000 */
@@ -689,7 +928,7 @@ int vchiq_platform_init(struct platform_device *pdev, VCHIQ_STATE_T *state)
 
 	/* lwg: set up dump control block before first irq  */
 	slot_virt = slot_mem;
-	slot_dump_size = slot_mem_size;
+	slot_dump_size = slot_mem_size + frag_mem_size;
 	init_dump_cb("/tmp/msg_dump.elf", slot_mem, slot_mem_size + frag_mem_size);
 
 	/* Send the base address of the slots to VideoCore
@@ -776,7 +1015,7 @@ vchiq_prepare_bulk_data(VCHIQ_BULK_T *bulk, VCHI_MEM_HANDLE_T memhandle,
 		return VCHIQ_ERROR;
 
 	bulk->handle = memhandle;
-	/* lwg: for rx */
+	/* lwg: for rx!!!!*/
 	bulk->data = (void *)(unsigned long)pagelistinfo->dma_addr;
 
 	/*
@@ -791,9 +1030,39 @@ vchiq_prepare_bulk_data(VCHIQ_BULK_T *bulk, VCHI_MEM_HANDLE_T memhandle,
 void
 vchiq_complete_bulk(VCHIQ_BULK_T *bulk)
 {
-	if (bulk && bulk->remote_data && bulk->actual)
+	if (bulk && bulk->remote_data && bulk->actual) {
+#if 0
+		/* now we have confirmed */
+		if ((u32) bulk->data == 0xf7058000) {
+		/*if (bulk->size == 0xa8c000) {*/
+			int i, num_pages;
+			num_pages = 2;
+			struct vchiq_pagelist_info *pg = (struct vchiq_pagelist_info *)bulk->remote_data;
+			struct page **pages = pg->pages;
+			int found = 0;
+			for (i = 0; i < num_pages; i++) {
+				struct page *page = pages[i];
+				void *dat = page_to_virt(page);
+				int ret = search_page(0xe1ffd8ff, dat, 4096);
+				if (ret == 1) {
+					found = 1;
+					break;
+				}
+				if (i == 0) {
+					printk("dumping 128 Bytes of first page..\n");
+					print_hex_dump(KERN_WARNING, "page: ",DUMP_PREFIX_OFFSET, 16, 4, dat, 128, 1);
+				}
+			}
+			if (found) {
+				printk("found jpg magic!!\n");
+			} else {
+				printk("did not find!\n");
+			}
+		}
+#endif
 		free_pagelist((struct vchiq_pagelist_info *)bulk->remote_data,
 			      bulk->actual);
+	}
 }
 
 void
@@ -872,7 +1141,12 @@ static void handle_replay_irq(void) {
 	struct elf_phdr *phdr = (struct elf_phdr *)(replay->head + idx);
 	size = phdr->p_memsz;
 	off = phdr->p_offset;
+	printk("to cmp two mem dump of seg = %d, size = %08x\n", idx, size);
 	void *buf = kvmalloc(size, GFP_KERNEL);
+	if (IS_ERR(buf)) {
+		printk("%s:cannot alloc %08x bytes for buf to do memcmp!\n", __func__, size);
+		goto out;
+	}
 	if (kernel_read(replay->dump, buf, size, &off) != size) {
 		printk("%s:cannot read in %08x bytes from %08x into buf!\n", __func__, size, off);
 		goto out;
@@ -978,11 +1252,10 @@ create_pagelist(char __user *buf, size_t count, unsigned short type,
 				       &dma_addr,
 				       GFP_KERNEL);
 
-	vchiq_log_trace(vchiq_arm_log_level, "create_pagelist - %pK",
-			pagelist);
 	if (!pagelist)
 		return NULL;
-
+	/* lwg: addrs to addrs + num_pages stores all dma addr of pages!
+	 * after that stores pointer to `struct page *', etc. for driver to keep track of */
 	addrs		= pagelist->addrs;
 	pages		= (struct page **)(addrs + num_pages);
 	scatterlist	= (struct scatterlist *)(pages + num_pages);
@@ -990,6 +1263,9 @@ create_pagelist(char __user *buf, size_t count, unsigned short type,
 			  (scatterlist + num_pages);
 
 	pagelist->length = count;
+	/* mess with the length 
+	 * lwg: turns out this also has to match!! */
+	/*pagelist->length = count - 100;*/
 	pagelist->type = type;
 	pagelist->offset = offset;
 
@@ -1060,6 +1336,7 @@ create_pagelist(char __user *buf, size_t count, unsigned short type,
 	 * Initialize the scatterlist so that the magic cookie
 	 *  is filled if debugging is enabled
 	 */
+	/* lwg: -- in total 2700 pages are allocated */
 	sg_init_table(scatterlist, num_pages);
 	/* Now set the pages for each scatterlist */
 	for (i = 0; i < num_pages; i++)	{
@@ -1101,6 +1378,8 @@ create_pagelist(char __user *buf, size_t count, unsigned short type,
 		    ((addrs[k - 1] & PAGE_MASK) +
 		     (((addrs[k - 1] & ~PAGE_MASK) + 1) << PAGE_SHIFT))
 		    == (addr & PAGE_MASK))
+			/* lwg: addrs[k-1] and addr[k] is contiguous, store the # of contiguous page in the 12 LSB
+			 * by adding to it */
 			addrs[k - 1] += ((len + PAGE_SIZE - 1) >> PAGE_SHIFT);
 		else
 			addrs[k++] = (addr & PAGE_MASK) |
@@ -1130,6 +1409,10 @@ create_pagelist(char __user *buf, size_t count, unsigned short type,
 			(fragments - g_fragments_base) / g_fragments_size;
 	}
 
+	vchiq_log_trace(vchiq_arm_log_level, "create_pagelist - %pK, phys = %08x, size = %08x, off = %08x, num_pages = %d, count = %d, type = %d, addr = %08x", pagelist, dma_addr, pagelist_size, offset, num_pages, pagelist->length, type, pagelist->addrs[0]);
+	/* dump first 128 bytes of pagelist
+	 * this will affect timing of replay */
+	/*print_hex_dump(KERN_WARNING, "pagelist: ",DUMP_PREFIX_OFFSET, 16, 4, pagelist, 128, 0);*/
 	return pagelistinfo;
 }
 

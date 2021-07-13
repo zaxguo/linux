@@ -117,7 +117,8 @@ static void init_regmap(void) {
 }
 
 void log_reg_rw(int rw, const char *str, uint32_t value) {
-	return;
+	/* do not log, directly return */
+	/*return;*/
 	int i, j;
 	i = strlen("gintmsk");
 	j = strlen(str);
@@ -125,7 +126,7 @@ void log_reg_rw(int rw, const char *str, uint32_t value) {
 		if (rw == 1) {
 			/*printk("write %08x to gintmsk...\n", value);*/
 			if (value & (1 << 3)) {
-				/*dump_stack();*/
+				dump_stack();
 			}
 		}
 	}
@@ -461,8 +462,9 @@ static void dwc_otg_enable_common_interrupts(dwc_otg_core_if_t * core_if)
 		intr_mask.b.rxstsqlvl = 1;
 	}
 
-	/* lwg: donot write 1 to enable intr */
-	/*intr_mask.b.sofintr = 1;*/
+	/* lwg: write 1 to disable intr */
+
+	intr_mask.b.sofintr = 1;
 
 	intr_mask.b.conidstschng = 1;
 	intr_mask.b.wkupintr = 1;
@@ -2124,11 +2126,13 @@ void dwc_otg_disable_host_interrupts(dwc_otg_core_if_t * core_if)
 	 * Disable host mode interrupts without disturbing common
 	 * interrupts.
 	 */
-	/* lwg: set to 0 = irq off */
+	/* lwg: set to 1 = irq off */
+
 	/*intr_mask.b.sofintr = 0;*/
 
 	intr_mask.b.sofintr = 1;
 	intr_mask.b.portintr = 1;
+	/* lwg: disable host mode irq */
 	intr_mask.b.hcintr = 1;
 	intr_mask.b.ptxfempty = 1;
 	intr_mask.b.nptxfempty = 1;
