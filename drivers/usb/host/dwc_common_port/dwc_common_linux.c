@@ -337,12 +337,16 @@ void DWC_DMA_POOL_FREE(dwc_pool_t *pool, void *vaddr, void *daddr)
 
 void *__DWC_DMA_ALLOC(void *dma_ctx, uint32_t size, dwc_dma_t *dma_addr)
 {
-	return dma_zalloc_coherent(dma_ctx, size, dma_addr, GFP_KERNEL | GFP_DMA32);
+	void *addr = dma_zalloc_coherent(dma_ctx, size, dma_addr, GFP_KERNEL | GFP_DMA32);
+	trace_printk("alloc %08x bytes @ %p (phys %08x)\n", size, addr, *dma_addr);
+	return addr;
 }
 
 void *__DWC_DMA_ALLOC_ATOMIC(void *dma_ctx, uint32_t size, dwc_dma_t *dma_addr)
 {
-	return dma_zalloc_coherent(dma_ctx, size, dma_addr, GFP_ATOMIC);
+	void *addr = dma_zalloc_coherent(dma_ctx, size, dma_addr, GFP_ATOMIC);
+	trace_printk("alloc %08x bytes @ %p (phys %08x)\n", size, addr, *dma_addr);
+	return addr;
 }
 
 void __DWC_DMA_FREE(void *dma_ctx, uint32_t size, void *virt_addr, dwc_dma_t dma_addr)

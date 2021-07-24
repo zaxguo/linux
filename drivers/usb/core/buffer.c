@@ -135,7 +135,7 @@ void *hcd_buffer_alloc(
 		*dma = ~(dma_addr_t) 0;
 		return kmalloc(size, mem_flags);
 	}
-
+	trace_printk("%d: alloc %d of dma mem\n", __LINE__, size);
 	for (i = 0; i < HCD_BUFFER_POOLS; i++) {
 		if (size <= pool_max[i])
 			return dma_pool_alloc(hcd->pool[i], mem_flags, dma);

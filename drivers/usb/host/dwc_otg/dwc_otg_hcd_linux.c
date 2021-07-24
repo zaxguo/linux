@@ -877,6 +877,7 @@ static int dwc_otg_urb_enqueue(struct usb_hcd *hcd,
 	if (urb->transfer_flags & URB_ZERO_PACKET)
 		flags |= URB_SEND_ZERO_PACKET;
 
+	/* lwg: urb dma filled by usb/core/hcd.c usb_hcd_map_urb_for_dma */
 	dwc_otg_hcd_urb_set_params(dwc_otg_urb, urb, buf,
 				   urb->transfer_dma,
 				   urb->transfer_buffer_length,

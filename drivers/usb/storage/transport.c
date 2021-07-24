@@ -151,8 +151,11 @@ static int usb_stor_msg_common(struct us_data *us, int timeout)
 	 * easier than always having the caller tell us whether the
 	 * transfer buffer has already been mapped.
 	 */
-	if (us->current_urb->transfer_buffer == us->iobuf)
-		us->current_urb->transfer_flags |= URB_NO_TRANSFER_DMA_MAP;
+	/* lwg: -- command is mapped ahead of map_urb_for_dma?? */
+	if (us->current_urb->transfer_buffer == us->iobuf) {
+		us->current_urb->transfer_flags |= URB_NO_TRANSFER_DMA_MAP; 
+		trace_printk("entered %d\n", __LINE__);
+	}
 	us->current_urb->transfer_dma = us->iobuf_dma;
 
 	/* submit the URB */
@@ -206,6 +209,11 @@ int usb_stor_control_msg(struct us_data *us, unsigned int pipe,
 
 	usb_stor_dbg(us, "rq=%02x rqtype=%02x value=%04x index=%02x len=%u\n",
 		     request, requesttype, value, index, size);
+
+	/* XX lwg XXX */
+	trace_printk("rq=%02x rqtype=%02x value=%04x index=%02x len=%u\n",
+		     request, requesttype, value, index, size);
+
 
 	/* fill in the devrequest structure */
 	us->cr->bRequestType = requesttype;
@@ -344,6 +352,10 @@ int usb_stor_ctrl_transfer(struct us_data *us, unsigned int pipe,
 	usb_stor_dbg(us, "rq=%02x rqtype=%02x value=%04x index=%02x len=%u\n",
 		     request, requesttype, value, index, size);
 
+	trace_printk("rq=%02x rqtype=%02x value=%04x index=%02x len=%u\n",
+		     request, requesttype, value, index, size);
+
+
 	/* fill in the devrequest structure */
 	us->cr->bRequestType = requesttype;
 	us->cr->bRequest = request;
@@ -404,6 +416,20 @@ int usb_stor_bulk_transfer_buf(struct us_data *us, unsigned int pipe,
 	int result;
 
 	usb_stor_dbg(us, "xfer %u bytes\n", length);
+
+	/* XXX -- here dd entry point */
+	trace_printk("xfer %u bytes\n", length);
+	int *seq = (int*)(us->current_urb->transfer_buffer + 1);
+	if (seq > 0x300) {
+		WARN_ON_ONCE(1);
+	}
+	/* dump urb packets */
+#if 0
+	if (length < 1024 && us->current_urb->transfer_buffer != NULL) {
+		printk("xfer %u bytes @ %08x\n", length, us->current_urb->transfer_dma);
+		print_hex_dump(KERN_WARNING, "urb data:", DUMP_PREFIX_OFFSET, 16, 4,  us->current_urb->transfer_buffer, length, 1);
+	}
+#endif
 
 	/* fill and submit the URB */
 	usb_fill_bulk_urb(us->current_urb, us->pusb_dev, pipe, buf, length,
@@ -1116,6 +1142,7 @@ int usb_stor_Bulk_max_lun(struct us_data *us)
 	return 0;
 }
 
+/* lwg: control command of Bulk go through here */
 int usb_stor_Bulk_transport(struct scsi_cmnd *srb, struct us_data *us)
 {
 	struct bulk_cb_wrap *bcb = (struct bulk_cb_wrap *) us->iobuf;
@@ -1126,6 +1153,7 @@ int usb_stor_Bulk_transport(struct scsi_cmnd *srb, struct us_data *us)
 	int fake_sense = 0;
 	unsigned int cswlen;
 	unsigned int cbwlen = US_BULK_CB_WRAP_LEN;
+	int i;
 
 	/* Take care of BULK32 devices; set extra byte to 0 */
 	if (unlikely(us->fflags & US_FL_BULK32)) {
@@ -1154,6 +1182,15 @@ int usb_stor_Bulk_transport(struct scsi_cmnd *srb, struct us_data *us)
 		     le32_to_cpu(bcb->DataTransferLength), bcb->Flags,
 		     (bcb->Lun >> 4), (bcb->Lun & 0x0F),
 		     bcb->Length);
+
+	trace_printk("Bulk Command S 0x%x T 0x%x L %d F %d Trg %d LUN %d CL %d\n",
+		     le32_to_cpu(bcb->Signature), bcb->Tag,
+		     le32_to_cpu(bcb->DataTransferLength), bcb->Flags,
+		     (bcb->Lun >> 4), (bcb->Lun & 0x0F),
+		     bcb->Length);
+
+
+
 	result = usb_stor_bulk_transfer_buf(us, us->send_bulk_pipe,
 				bcb, cbwlen, NULL);
 	usb_stor_dbg(us, "Bulk command transfer result=%d\n", result);
@@ -1176,6 +1213,7 @@ int usb_stor_Bulk_transport(struct scsi_cmnd *srb, struct us_data *us)
 				us->recv_bulk_pipe : us->send_bulk_pipe;
 		result = usb_stor_bulk_srb(us, pipe, srb);
 		usb_stor_dbg(us, "Bulk data transfer result 0x%x\n", result);
+		trace_printk("Bulk data transfer result 0x%x\n", result);
 		if (result == USB_STOR_XFER_ERROR)
 			return USB_STOR_TRANSPORT_ERROR;
 
@@ -1222,6 +1260,7 @@ int usb_stor_Bulk_transport(struct scsi_cmnd *srb, struct us_data *us)
 
 	/* get CSW for device status */
 	usb_stor_dbg(us, "Attempting to get CSW...\n");
+	trace_printk("Attempting to get CSW...\n");
 	result = usb_stor_bulk_transfer_buf(us, us->recv_bulk_pipe,
 				bcs, US_BULK_CS_WRAP_LEN, &cswlen);
 
@@ -1232,6 +1271,7 @@ int usb_stor_Bulk_transport(struct scsi_cmnd *srb, struct us_data *us)
 	 */
 	if (result == USB_STOR_XFER_SHORT && cswlen == 0) {
 		usb_stor_dbg(us, "Received 0-length CSW; retrying...\n");
+		trace_printk("Received 0-length CSW; retrying...\n");
 		result = usb_stor_bulk_transfer_buf(us, us->recv_bulk_pipe,
 				bcs, US_BULK_CS_WRAP_LEN, &cswlen);
 	}
@@ -1241,6 +1281,7 @@ int usb_stor_Bulk_transport(struct scsi_cmnd *srb, struct us_data *us)
 
 		/* get the status again */
 		usb_stor_dbg(us, "Attempting to get CSW (2nd try)...\n");
+		trace_printk("Attempting to get CSW (2nd try)...\n");
 		result = usb_stor_bulk_transfer_buf(us, us->recv_bulk_pipe,
 				bcs, US_BULK_CS_WRAP_LEN, NULL);
 	}

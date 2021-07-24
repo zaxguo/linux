@@ -119,17 +119,22 @@ static void init_regmap(void) {
 void log_reg_rw(int rw, const char *str, uint32_t value) {
 	/* do not log, directly return */
 	/*return;*/
+#if 0
+	/* look for the code which turns on sof */
 	int i, j;
-	i = strlen("gintmsk");
+	char *reg = "hcdma";
+	i = strlen(reg);
 	j = strlen(str);
-	if (!strcmp(str + (j - i), "gintmsk")) {
+	if (!strcmp(str + (j - i), reg)) {
 		if (rw == 1) {
+			dump_stack();
 			/*printk("write %08x to gintmsk...\n", value);*/
-			if (value & (1 << 3)) {
-				dump_stack();
-			}
+			/*if (value & (1 << 3)) {*/
+				/*dump_stack();*/
+			/*}*/
 		}
 	}
+#endif
 	trace_printk("%d,%s,%08x\n", rw, str, value);
 }
 EXPORT_SYMBOL(log_reg_rw);
@@ -463,8 +468,7 @@ static void dwc_otg_enable_common_interrupts(dwc_otg_core_if_t * core_if)
 	}
 
 	/* lwg: write 1 to disable intr */
-
-	intr_mask.b.sofintr = 1;
+	/*intr_mask.b.sofintr = 1;*/
 
 	intr_mask.b.conidstschng = 1;
 	intr_mask.b.wkupintr = 1;
@@ -2835,6 +2839,7 @@ void dwc_otg_hc_start_transfer(dwc_otg_core_if_t * core_if, dwc_hc_t * hc)
 
 	hctsiz.d32 = 0;
 
+	trace_printk("orig transfer length = %u\n", hc->xfer_len);
 	if (hc->do_ping) {
 		if (!core_if->dma_enable) {
 			dwc_otg_hc_do_ping(core_if, hc);
@@ -2854,6 +2859,7 @@ void dwc_otg_hc_start_transfer(dwc_otg_core_if_t * core_if, dwc_hc_t * hc)
 			hc->xfer_len = 0;
 		} else if (hc->ep_is_in || (hc->xfer_len > hc->max_packet)) {
 			hc->xfer_len = hc->max_packet;
+			printk("set transfer length to %u\n", hc->max_packet);
 		} else if (!hc->ep_is_in && (hc->xfer_len > 188)) {
 			hc->xfer_len = 188;
 		}
@@ -2900,6 +2906,8 @@ void dwc_otg_hc_start_transfer(dwc_otg_core_if_t * core_if, dwc_hc_t * hc)
 		if (hc->ep_is_in) {
 			/* Always program an integral # of max packets for IN transfers. */
 			hc->xfer_len = num_packets * hc->max_packet;
+			/* lwg:here get CSW packet transfer size is wrapped from 13 to 512 bytes */
+			trace_printk("transfer length = %u, %d\n", hc->xfer_len, __LINE__);
 		}
 
 		if (hc->ep_type == DWC_OTG_EP_TYPE_INTR ||
@@ -2926,6 +2934,12 @@ void dwc_otg_hc_start_transfer(dwc_otg_core_if_t * core_if, dwc_hc_t * hc)
 	DWC_DEBUGPL(DBG_HCDV, "	 Xfer Size: %d\n", hctsiz.b.xfersize);
 	DWC_DEBUGPL(DBG_HCDV, "	 Num Pkts: %d\n", hctsiz.b.pktcnt);
 	DWC_DEBUGPL(DBG_HCDV, "	 Start PID: %d\n", hctsiz.b.pid);
+
+	trace_printk("%s: Channel %d\n", __func__, hc->hc_num);
+	trace_printk("	 Xfer Size: %d\n", hctsiz.b.xfersize);
+	trace_printk("	 Num Pkts: %d\n", hctsiz.b.pktcnt);
+	trace_printk("	 Start PID: %d\n", hctsiz.b.pid);
+
 
 	if (core_if->dma_enable) {
 		dwc_dma_t dma_addr;

@@ -1511,6 +1511,11 @@ int usb_hcd_map_urb_for_dma(struct usb_hcd *hcd, struct urb *urb,
 {
 	enum dma_data_direction dir;
 	int ret = 0;
+	trace_printk("entered, buffer length = %d\n", urb->transfer_buffer_length);
+
+	if (urb->transfer_buffer_length == 4096) {
+		WARN_ON_ONCE(1);
+	}
 
 	/* Map the URB's buffers for DMA access.
 	 * Lower level HCD code should use *_dma exclusively,
@@ -1518,6 +1523,7 @@ int usb_hcd_map_urb_for_dma(struct usb_hcd *hcd, struct urb *urb,
 	 * or uses the provided scatter gather list for bulk.
 	 */
 
+	trace_printk("entered %d\n", __LINE__);
 	if (usb_endpoint_xfer_control(&urb->ep->desc)) {
 		if (hcd->self.uses_pio_for_control)
 			return ret;
@@ -1535,6 +1541,7 @@ int usb_hcd_map_urb_for_dma(struct usb_hcd *hcd, struct urb *urb,
 					urb->setup_packet,
 					sizeof(struct usb_ctrlrequest),
 					DMA_TO_DEVICE);
+			trace_printk("%d: alloc setup dma %08x bytes @ %08x\n", __LINE__, sizeof(struct usb_ctrlrequest), urb->setup_dma);
 			if (dma_mapping_error(hcd->self.sysdev,
 						urb->setup_dma))
 				return -EAGAIN;
@@ -1546,16 +1553,26 @@ int usb_hcd_map_urb_for_dma(struct usb_hcd *hcd, struct urb *urb,
 					(void **)&urb->setup_packet,
 					sizeof(struct usb_ctrlrequest),
 					DMA_TO_DEVICE);
+			trace_printk("%d: alloc setup dma %08x bytes @ %08x\n", __LINE__, sizeof(struct usb_ctrlrequest), urb->setup_dma);
 			if (ret)
 				return ret;
 			urb->transfer_flags |= URB_SETUP_MAP_LOCAL;
 		}
 	}
 
+	trace_printk("entered %d flags = %08x\n", __LINE__, urb->transfer_flags);
+	/* when caller is usb_stor_msg_common, it will set the flag because it will directly map the DMA buf */
+#if 0
+	if (urb->transfer_flags & URB_NO_TRANSFER_DMA_MAP) {
+		WARN_ON_ONCE(1);
+	}
+#endif
 	dir = usb_urb_dir_in(urb) ? DMA_FROM_DEVICE : DMA_TO_DEVICE;
 	if (urb->transfer_buffer_length != 0
 	    && !(urb->transfer_flags & URB_NO_TRANSFER_DMA_MAP)) {
+		trace_printk("entered %d\n", __LINE__);
 		if (IS_ENABLED(CONFIG_HAS_DMA) && hcd->self.uses_dma) {
+			trace_printk("%d: entered\n", __LINE__);
 			if (urb->num_sgs) {
 				int n;
 
@@ -1570,6 +1587,10 @@ int usb_hcd_map_urb_for_dma(struct usb_hcd *hcd, struct urb *urb,
 						urb->sg,
 						urb->num_sgs,
 						dir);
+
+				/* lwg */
+				trace_printk("%d: map %d existing sg list for dma @ %08x\n", __LINE__, n, sg_dma_address(urb->sg));
+
 				if (n <= 0)
 					ret = -EAGAIN;
 				else
@@ -1586,6 +1607,10 @@ int usb_hcd_map_urb_for_dma(struct usb_hcd *hcd, struct urb *urb,
 						sg->offset,
 						urb->transfer_buffer_length,
 						dir);
+
+				/* lwg */
+				trace_printk("%d: alloc transfer dma %08x bytes @ %08x\n", __LINE__, urb->transfer_buffer_length, urb->transfer_dma);
+
 				if (dma_mapping_error(hcd->self.sysdev,
 						urb->transfer_dma))
 					ret = -EAGAIN;
@@ -1603,6 +1628,9 @@ int usb_hcd_map_urb_for_dma(struct usb_hcd *hcd, struct urb *urb,
 						urb->transfer_buffer,
 						urb->transfer_buffer_length,
 						dir);
+				/* lwg */
+				trace_printk("%d: alloc transfer dma %08x bytes @ %08x\n", __LINE__, urb->transfer_buffer_length, urb->transfer_dma);
+
 				if (dma_mapping_error(hcd->self.sysdev,
 						urb->transfer_dma))
 					ret = -EAGAIN;
@@ -1616,13 +1644,17 @@ int usb_hcd_map_urb_for_dma(struct usb_hcd *hcd, struct urb *urb,
 					&urb->transfer_buffer,
 					urb->transfer_buffer_length,
 					dir);
+			trace_printk("%d: alloc transfer dma %08x bytes @ %08x\n", __LINE__, sizeof(struct usb_ctrlrequest), urb->setup_dma);
 			if (ret == 0)
 				urb->transfer_flags |= URB_MAP_LOCAL;
 		}
+		trace_printk("entered %d\n", __LINE__);
 		if (ret && (urb->transfer_flags & (URB_SETUP_MAP_SINGLE |
 				URB_SETUP_MAP_LOCAL)))
 			usb_hcd_unmap_urb_for_dma(hcd, urb);
 	}
+
+	trace_printk("%d: ret = %d\n", __LINE__, ret);
 	return ret;
 }
 EXPORT_SYMBOL_GPL(usb_hcd_map_urb_for_dma);
