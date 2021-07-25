@@ -118,7 +118,7 @@ static void init_regmap(void) {
 
 void log_reg_rw(int rw, const char *str, uint32_t value) {
 	/* do not log, directly return */
-	/*return;*/
+	return;
 #if 0
 	/* look for the code which turns on sof */
 	int i, j;
@@ -2839,7 +2839,7 @@ void dwc_otg_hc_start_transfer(dwc_otg_core_if_t * core_if, dwc_hc_t * hc)
 
 	hctsiz.d32 = 0;
 
-	trace_printk("orig transfer length = %u\n", hc->xfer_len);
+	/*trace_printk("orig transfer length = %u\n", hc->xfer_len);*/
 	if (hc->do_ping) {
 		if (!core_if->dma_enable) {
 			dwc_otg_hc_do_ping(core_if, hc);
@@ -2907,7 +2907,7 @@ void dwc_otg_hc_start_transfer(dwc_otg_core_if_t * core_if, dwc_hc_t * hc)
 			/* Always program an integral # of max packets for IN transfers. */
 			hc->xfer_len = num_packets * hc->max_packet;
 			/* lwg:here get CSW packet transfer size is wrapped from 13 to 512 bytes */
-			trace_printk("transfer length = %u, %d\n", hc->xfer_len, __LINE__);
+			/*trace_printk("transfer length = %u, %d\n", hc->xfer_len, __LINE__);*/
 		}
 
 		if (hc->ep_type == DWC_OTG_EP_TYPE_INTR ||
@@ -2935,10 +2935,12 @@ void dwc_otg_hc_start_transfer(dwc_otg_core_if_t * core_if, dwc_hc_t * hc)
 	DWC_DEBUGPL(DBG_HCDV, "	 Num Pkts: %d\n", hctsiz.b.pktcnt);
 	DWC_DEBUGPL(DBG_HCDV, "	 Start PID: %d\n", hctsiz.b.pid);
 
+#if 0
 	trace_printk("%s: Channel %d\n", __func__, hc->hc_num);
 	trace_printk("	 Xfer Size: %d\n", hctsiz.b.xfersize);
 	trace_printk("	 Num Pkts: %d\n", hctsiz.b.pktcnt);
 	trace_printk("	 Start PID: %d\n", hctsiz.b.pid);
+#endif 
 
 
 	if (core_if->dma_enable) {

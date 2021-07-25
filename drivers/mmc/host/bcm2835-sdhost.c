@@ -158,7 +158,7 @@
 int in_replay;
 EXPORT_SYMBOL(in_replay);
 
-static int record = 0;
+static int record = 1;
 
 uint32_t *dma_data, *dma_data2, *dma_data3, *dma_data4;
 
@@ -2510,7 +2510,7 @@ static const struct file_operations mmc_replay_ops = {
 
 static int bcm2835_sdhost_probe(struct platform_device *pdev)
 {
-	/*record = 1;*/
+	record = 1;
 	trace_printk("probe start\n");
 	struct device *dev = &pdev->dev;
 	struct device_node *node = dev->of_node;
@@ -2655,7 +2655,7 @@ static int bcm2835_sdhost_probe(struct platform_device *pdev)
 	my_host = host;
 	printk("setting %p to procfs\n", host);
 	/* control trace_printk */
-	record = 0;
+	/*record = 0;*/
 	return 0;
 
 err:
