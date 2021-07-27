@@ -93,28 +93,28 @@ static void test_shm(struct tee_device *dev, int size) {
 
 static inline void req_read(void *base, int off, int expected) {
 	u32 val = readl(base + off);
-	printk("reading [%08x, %08x]:[%p:%d]\n", val, expected, base, off);
+	/*printk("reading [%08x, %08x]:[%p:%d]\n", val, expected, base, off);*/
 	if (val != (u32)expected) {
-		printk("!!! divergence happened at %d!\n", __LINE__);
+		/*printk("!!! divergence happened at %d!\n", __LINE__);*/
 	}
 }
 
 static inline void reply_read(void *base, int off, int expected) {
 	u32 val = readl(base + off);
-	printk("reading [%08x, %08x]:[%p:%d]\n", val, expected, base, off);
+	/*printk("reading [%08x, %08x]:[%p:%d]\n", val, expected, base, off);*/
 	if (val != (u32)expected) {
-		printk("!!! divergence happened at %d!\n", __LINE__);
+		/*printk("!!! divergence happened at %d!\n", __LINE__);*/
 	}
 
 }
 
 static inline void req_write(void *base, int off, int val) {
-	printk("writing [%08x,%p:%d]\n", val, base, off);
+	/*printk("writing [%08x,%p:%d]\n", val, base, off);*/
 	writel(val, base + off);
 }
 
 static inline void reply_write(void *base, int off, int val) {
-	printk("writing [%08x,%p:%d]\n", val, base, off);
+	/*printk("writing [%08x,%p:%d]\n", val, base, off);*/
 	writel(val, base + off);
 }
 
@@ -147,7 +147,7 @@ static dma_addr_t prepare_cb(void* teedev) {
 	*(cb + 5) = 0x0;
 	*(cb + 6) = 0x0;
 	*(cb + 7) = 0x0;
-	print_hex_dump(KERN_WARNING, "cb:", DUMP_PREFIX_OFFSET, 16, 4, cb, 32, 0);
+	/*print_hex_dump(KERN_WARNING, "cb:", DUMP_PREFIX_OFFSET, 16, 4, cb, 32, 0);*/
 	__flush_dcache_area(shm->kaddr, 32);
 	return shm->paddr - DMA_OFF;
 }
@@ -161,7 +161,7 @@ static void replay_dma_write(void *teedev, void *host) {
 	}
 
 	dma_addr_t cb = prepare_cb(teedev);
-	printk("lwg:%s:%d: cb [%08x].\n", __func__, __LINE__, cb);
+	/*printk("lwg:%s:%d: cb [%08x].\n", __func__, __LINE__, cb);*/
 	/*spin_lock_irqsave(&replay_lock, flags);*/
 	req_read(host, SDEDM, 0x00010801);
 	req_read(host, SDCMD, 0x0000000d);
@@ -172,7 +172,7 @@ static void replay_dma_write(void *teedev, void *host) {
 	req_write(host, SDARG, 0x00000000);
 	req_write(host, SDCMD, 0x00008099);
 	req_write(replay_dma_chan, BCM2835_DMA_ADDR, cb);
-	printk("%d:start... (debug = %08x, src = %08x)\n", __LINE__, readl(replay_dma_chan + BCM2835_DMA_DEBUG), readl(replay_dma_chan + BCM2835_DMA_SOURCE_AD));
+	/*printk("%d:start... (debug = %08x, src = %08x)\n", __LINE__, readl(replay_dma_chan + BCM2835_DMA_DEBUG), readl(replay_dma_chan + BCM2835_DMA_SOURCE_AD));*/
 	req_write(replay_dma_chan, BCM2835_DMA_CS, 0x00000001);
 	req_read(replay_dma_chan, BCM2835_DMA_CS, 0x0000000b);
 	req_read(host, SDCMD, 0x00000099);
@@ -181,8 +181,8 @@ static void replay_dma_write(void *teedev, void *host) {
 	do {
 		cpu_relax();
 		val = readl(replay_dma_chan + BCM2835_DMA_CS);
-		printk("%d:poll... (val = %08x, debug = %08x, src = %08x)\n", __LINE__, val, readl(replay_dma_chan + BCM2835_DMA_DEBUG), readl(replay_dma_chan + BCM2835_DMA_SOURCE_AD));
-		udelay(10);
+		/*printk("%d:poll... (val = %08x, debug = %08x, src = %08x)\n", __LINE__, val, readl(replay_dma_chan + BCM2835_DMA_DEBUG), readl(replay_dma_chan + BCM2835_DMA_SOURCE_AD));*/
+		udelay(1);
 	} while ((val &= 0x00000004) == 0);
 	/* ack */
 	reply_write(replay_dma_chan, BCM2835_DMA_CS, 0x00000004);
@@ -223,6 +223,8 @@ static void replay_dma_write(void *teedev, void *host) {
 
 static int tee_replay_trigger(struct seq_file *s, void *data) {
 	struct tee_device *teedev = s->private;
+	struct timeval start, end;
+	int us_diff;
 
 	/* dma chan 8 irq */
 	in_replay = 1;
@@ -230,10 +232,15 @@ static int tee_replay_trigger(struct seq_file *s, void *data) {
 	/* sdhost irq */
 	disable_irq(71);
 	int i = 0;
+	do_gettimeofday(&start);
 	for (i = 0; i < 10; i++) {
-		printk("replaying %d times\n", i);
+		/*printk("replaying %d times\n", i);*/
 		replay_dma_write(teedev, replay_sdhost);
 	}
+	do_gettimeofday(&end);
+	us_diff = (end.tv_sec - start.tv_sec) * 1000000 +
+		(end.tv_usec - start.tv_usec);
+	printk("replaying %d KB takes %d us (tput = %d KB/s)\n", i * 4, us_diff, (i*4)*1000000/us_diff);
 	in_replay = 0;
 	enable_irq(71);
 	enable_irq(56);
