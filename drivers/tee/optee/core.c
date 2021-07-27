@@ -62,6 +62,7 @@
 
 #define BCM2835_DMA_CS		0x00
 #define BCM2835_DMA_ADDR	0x04
+#define BCM2835_DMA_SOURCE_AD	0x0c
 #define BCM2835_DMA_DEBUG	0x20
 
 
@@ -169,6 +170,7 @@ static void replay_dma_write(void *teedev, void *host) {
 	req_write(host, SDARG, 0x00000000);
 	req_write(host, SDCMD, 0x00008099);
 	req_write(replay_dma_chan, BCM2835_DMA_ADDR, cb);
+	printk("%d:start... (debug = %08x, src = %08x)\n", __LINE__, readl(replay_dma_chan + BCM2835_DMA_DEBUG), readl(replay_dma_chan + BCM2835_DMA_SOURCE_AD));
 	req_write(replay_dma_chan, BCM2835_DMA_CS, 0x00000001);
 	req_read(replay_dma_chan, BCM2835_DMA_CS, 0x0000000b);
 	req_read(host, SDCMD, 0x00000099);
@@ -177,11 +179,12 @@ static void replay_dma_write(void *teedev, void *host) {
 	do {
 		cpu_relax();
 		val = readl(replay_dma_chan + BCM2835_DMA_CS);
-		printk("%d:poll... (val = %08x, debug = %08x)\n", __LINE__, val, readl(replay_dma_chan + BCM2835_DMA_DEBUG));
+		printk("%d:poll... (val = %08x, debug = %08x, src = %08x)\n", __LINE__, val, readl(replay_dma_chan + BCM2835_DMA_DEBUG), readl(replay_dma_chan + BCM2835_DMA_SOURCE_AD));
 		udelay(10);
 	} while ((val &= 0x00000004) == 0);
 	/* ack */
 	reply_write(replay_dma_chan, BCM2835_DMA_CS, 0x00000004);
+	printk("%d:ack ... (debug = %08x, src = %08x)\n", __LINE__, readl(replay_dma_chan + BCM2835_DMA_DEBUG), readl(replay_dma_chan + BCM2835_DMA_SOURCE_AD));
 	reply_read(host, SDHSTS, 0x00000000);
 	reply_read(host, SDCMD, 0x00000099);
 	reply_read(host, SDEDM, 0x00010801);
