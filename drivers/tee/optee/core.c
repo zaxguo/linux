@@ -28,10 +28,220 @@
 #include <linux/uaccess.h>
 #include "optee_private.h"
 #include "optee_smc.h"
+#include <asm/dma-mapping.h>
+#include <linux/proc_fs.h>
+#include <linux/delay.h>
+
+
+#include <linux/interrupt.h>
+#include "../tee_private.h"
 
 #define DRIVER_NAME "optee"
 
 #define OPTEE_SHM_NUM_PRIV_PAGES	1
+
+
+#define DMA_OFF 0x40000000
+
+
+#define SDCMD  0x00 /* Command to SD card              - 16 R/W */
+#define SDARG  0x04 /* Argument to SD card             - 32 R/W */
+#define SDTOUT 0x08 /* Start value for timeout counter - 32 R/W */
+#define SDCDIV 0x0c /* Start value for clock divider   - 11 R/W */
+#define SDRSP0 0x10 /* SD card response (31:0)         - 32 R   */
+#define SDRSP1 0x14 /* SD card response (63:32)        - 32 R   */
+#define SDRSP2 0x18 /* SD card response (95:64)        - 32 R   */
+#define SDRSP3 0x1c /* SD card response (127:96)       - 32 R   */
+#define SDHSTS 0x20 /* SD host status                  - 11 R   */
+#define SDVDD  0x30 /* SD card power control           -  1 R/W */
+#define SDEDM  0x34 /* Emergency Debug Mode            - 13 R/W */
+#define SDHCFG 0x38 /* Host configuration              -  2 R/W */
+#define SDHBCT 0x3c /* Host byte count (debug)         - 32 R/W */
+#define SDDATA 0x40 /* Data to/from SD card            - 32 R/W */
+#define SDHBLC 0x50 /* Host block count (SDIO/SDHC)    -  9 R/W */
+
+#define BCM2835_DMA_CS		0x00
+#define BCM2835_DMA_ADDR	0x04
+
+
+extern void __iomem *replay_dma_chan;
+extern void __iomem *replay_sdhost;
+extern int in_replay;
+
+/* test shm mem DMA-ability */
+static void test_shm(struct tee_device *dev, int size) {
+	struct tee_context *ctx = kmalloc(sizeof(struct tee_context), GFP_KERNEL);
+	ctx->teedev = dev;
+	INIT_LIST_HEAD(&ctx->list_shm);
+	printk("hit..%d\n", __LINE__);
+	/*struct tee_shm *shm = tee_shm_alloc(ctx, size, TEE_SHM_DMA_BUF | TEE_SHM_MAPPED);*/
+	struct tee_shm *shm = tee_shm_alloc(ctx, size, TEE_SHM_MAPPED | TEE_SHM_DMA_BUF);
+	if (IS_ERR(shm)) {
+		printk("lwg:%s:%d: cannot get the shm of %d bytes!!!\n", __func__, __LINE__, size);
+		return;
+	}
+	printk("lwg:%s:%d: successfully get shm of %d bytes @ %p.\n", __func__, __LINE__, size, shm);
+	int paddr = shm->paddr;
+	int pages = shm->num_pages;
+	/* lwg: teedev->dev is a NULL during initialization */
+	dma_addr_t dma_addr = paddr - DMA_OFF;
+	printk("paddr = %08x, pages = %d, dma addr = %08x\n", paddr, pages, dma_addr);
+	return;
+}
+
+static inline void req_read(void *base, int off, int expected) {
+	u32 val = readl(base + off);
+	printk("reading [%08x, %08x]:[%p:%d]\n", val, expected, base, off);
+	if (val != (u32)expected) {
+		printk("!!! divergence happened at %d!\n", __LINE__);
+	}
+}
+
+static inline void reply_read(void *base, int off, int expected) {
+	u32 val = readl(base + off);
+	printk("reading [%08x, %08x]:[%p:%d]\n", val, expected, base, off);
+	if (val != (u32)expected) {
+		printk("!!! divergence happened at %d!\n", __LINE__);
+	}
+
+}
+
+static inline void req_write(void *base, int off, int val) {
+	printk("writing [%08x,%p:%d]\n", val, base, off);
+	writel(val, base + off);
+}
+
+static inline void reply_write(void *base, int off, int val) {
+	printk("writing [%08x,%p:%d]\n", val, base, off);
+	writel(val, base + off);
+}
+
+static DEFINE_SPINLOCK(replay_lock);
+
+static dma_addr_t prepare_cb(void* teedev) {
+	struct tee_context *ctx = kmalloc(sizeof(struct tee_context), GFP_KERNEL);
+	ctx->teedev = teedev;
+	INIT_LIST_HEAD(&ctx->list_shm);
+	struct tee_shm *shm = tee_shm_alloc(ctx, 8 * sizeof(u32), TEE_SHM_MAPPED | TEE_SHM_DMA_BUF);
+	struct tee_shm *data = tee_shm_alloc(ctx, 4096, TEE_SHM_MAPPED | TEE_SHM_DMA_BUF);
+	if (IS_ERR(shm)) {
+		printk("lwg:%s:%d: cannot get the shm of %d bytes!!!\n", __func__, __LINE__, 32);
+		return 0;
+	}
+	if (IS_ERR(data)) {
+		printk("lwg:%s:%d: cannot get the shm of %d bytes!!!\n", __func__, __LINE__, 4096);
+		return 0;
+	}
+	memset(data->kaddr, 0xdd, 4096);
+	wmb();
+
+	u32 *cb = shm->kaddr;
+	*cb = 0x000d0149;
+	*(cb + 1) = data->paddr - DMA_OFF;
+	*(cb + 2) = 0x7e202040;
+	*(cb + 3) = 0x00001000;
+	*(cb + 4) = 0x0;
+	*(cb + 5) = 0x0;
+	*(cb + 6) = 0x0;
+	*(cb + 7) = 0x0;
+	print_hex_dump(KERN_WARNING, "cb:", DUMP_PREFIX_OFFSET, 16, 4, cb, 32, 0);
+	return shm->paddr - DMA_OFF;
+}
+
+static void replay_dma_write(void *teedev, void *host) {
+	unsigned long flags;
+
+	if (replay_dma_chan == NULL || host == NULL) {
+		printk("dma: %p or host: %p, invalid!\n", replay_dma_chan, host);
+		return;
+	}
+
+	dma_addr_t cb = prepare_cb(teedev);
+	printk("lwg:%s:%d: cb [%08x].\n", __func__, __LINE__, cb);
+	/*spin_lock_irqsave(&replay_lock, flags);*/
+	req_read(host, SDEDM, 0x00010801);
+	req_read(host, SDCMD, 0x0000000d);
+	req_read(host, SDHSTS, 0x00000000);
+	req_write(host, SDHCFG, 0x0000040e);
+	req_write(host, SDHBCT, 0x00000200);
+	req_write(host, SDHBLC, 0x00000008);
+	req_write(host, SDARG, 0x00000000);
+	req_write(host, SDCMD, 0x00008099);
+	req_write(replay_dma_chan, BCM2835_DMA_ADDR, cb);
+	req_write(replay_dma_chan, BCM2835_DMA_CS, 0x00000001);
+	req_read(replay_dma_chan, BCM2835_DMA_CS, 0x0000000b);
+	req_read(host, SDCMD, 0x00000099);
+	req_read(host, SDRSP0, 0x00000900);
+	u32 val;
+	do {
+		val = readl(replay_dma_chan + BCM2835_DMA_CS);
+		printk("%d:poll... (val = %08x\n", __LINE__, val);
+	} while (val != 0x00000006);
+	/* ack */
+	reply_write(replay_dma_chan, BCM2835_DMA_CS, 0x00000004);
+	reply_read(host, SDHSTS, 0x00000000);
+	reply_read(host, SDCMD, 0x00000099);
+	reply_read(host, SDEDM, 0x00010801);
+	reply_write(host, SDHCFG, 0x0000040e);
+	reply_read(host, SDCMD, 0x00000099);
+	reply_read(host, SDHSTS, 0x00000000);
+	reply_write(host, SDARG, 0x00000000);
+	reply_write(host, SDCMD, 0x0000880c);
+	/* poll */
+#if 1
+	do {
+		val = readl(host + SDHSTS);
+		printk("%d:poll... (val = %08x\n", __LINE__, val);
+	} while (val != 0x00000400);
+#endif
+	/*reply_read(host, SDHSTS, 0x00000400);*/
+	reply_write(host, SDHSTS, 0x00000701);
+	reply_read(host, SDCMD, 0x0000080c);
+	reply_read(host, SDRSP0, 0x00000c00);
+	reply_read(host, SDHSTS, 0x00000000);
+
+	req_read(host, SDEDM, 0x00010801);
+	req_read(host, SDCMD, 0x0000080c);
+	req_read(host, SDHSTS, 0x00000000);
+	req_write(host, SDARG, 0x59b40000);
+	req_write(host, SDCMD, 0x0000800d);
+	req_read(host, SDCMD, 0x0000800d);
+	req_read(host, SDCMD, 0x0000800d);
+	req_read(host, SDCMD, 0x0000000d);
+	req_read(host, SDRSP0, 0x00000900);
+	/*spin_unlock_irqrestore(&replay_lock, flags);*/
+}
+
+
+static int tee_replay_trigger(struct seq_file *s, void *data) {
+	struct tee_device *teedev = s->private;
+	/* dma chan 8 irq */
+	disable_irq(56);
+	/* sdhost irq */
+	disable_irq(71);
+	int i = 0;
+	for (i = 0; i < 10; i++) {
+		printk("replaying %d times\n", i);
+		replay_dma_write(teedev, replay_sdhost);
+		msleep(1000);
+	}
+	enable_irq(71);
+	enable_irq(56);
+	return 0;
+}
+
+static int tee_replay_open(struct inode *inode, struct file *file) {
+	return single_open(file, tee_replay_trigger, PDE_DATA(inode));
+}
+
+static const struct file_operations tee_replay_ops = {
+	.open = tee_replay_open,
+	.read = seq_read,
+	.llseek = seq_lseek,
+	.release = single_release,
+};
+
+
 
 /**
  * optee_from_msg_param() - convert from OPTEE_MSG parameters to
@@ -410,6 +620,10 @@ optee_config_shm_memremap(optee_invoke_fn *invoke_fn, void **memremaped_shm)
 		memunmap(va);
 		goto out;
 	}
+	/* lwg get pool */
+	printk("create tee mem pool.....\n");
+	printk("priv_info paddr: %08x, size %08x\n", paddr, priv_info.size);
+	printk("dmabuf    paddr: %08x, size %08x\n", dmabuf_info.paddr, dmabuf_info.size);
 
 	*memremaped_shm = va;
 out:
@@ -454,6 +668,7 @@ static optee_invoke_fn *get_invoke_func(struct device_node *np)
 	pr_warn("invalid \"method\" property: %s\n", method);
 	return ERR_PTR(-EINVAL);
 }
+
 
 static struct optee *optee_probe(struct device_node *np)
 {
@@ -536,6 +751,10 @@ static struct optee *optee_probe(struct device_node *np)
 	optee_enable_shm_cache(optee);
 
 	pr_info("initialized driver\n");
+
+	proc_create_data("tee_replay", 0, NULL, &tee_replay_ops, teedev);
+	printk("proc create... teedev = %p\n", teedev);
+
 	return optee;
 err:
 	if (optee) {
@@ -588,6 +807,9 @@ static const struct of_device_id optee_match[] = {
 
 static struct optee *optee_svc;
 
+
+
+
 static int __init optee_driver_init(void)
 {
 	struct device_node *fw_np;
@@ -610,6 +832,7 @@ static int __init optee_driver_init(void)
 		return PTR_ERR(optee);
 
 	optee_svc = optee;
+
 
 	return 0;
 }

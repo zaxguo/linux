@@ -50,8 +50,11 @@ MODULE_AUTHOR("Vincent Sanders");
 MODULE_LICENSE("GPL");
 MODULE_VERSION(BM2835_MMAL_VERSION);
 
-/* lwg: setting debug level */
-int bcm2835_v4l2_debug = 2;
+/* lwg: setting debug to off */
+int bcm2835_v4l2_debug = 0;
+
+/* lwg: setting debug level to on */
+/*int bcm2835_v4l2_debug = 2;*/
 module_param_named(debug, bcm2835_v4l2_debug, int, 0644);
 MODULE_PARM_DESC(bcm2835_v4l2_debug, "Debug level 0-2");
 

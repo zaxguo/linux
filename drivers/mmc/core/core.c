@@ -2566,7 +2566,9 @@ void mmc_rescan(struct work_struct *work)
 
 	if (host->rescan_disable)
 		return;
+	trace_printk("start to rescan...\n");
 
+	host->caps |= MMC_CAP_NONREMOVABLE;
 	/* If there is a non-removable card registered, only scan once */
 	if (!mmc_card_is_removable(host) && host->rescan_entered)
 		return;

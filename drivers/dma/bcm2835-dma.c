@@ -53,6 +53,9 @@
 
 #define STR(x) #x
 extern int in_replay;
+void __iomem *replay_dma_chan;
+EXPORT_SYMBOL(replay_dma_chan);
+
 
 struct bcm2835_dmadev {
 	struct dma_device ddev;
@@ -552,7 +555,9 @@ static irqreturn_t bcm2835_dma_callback(int irq, void *data)
 	struct bcm2835_desc *d;
 	unsigned long flags;
 	trace_printk("entered\n");
-
+	u32 val = readl(c->chan_base + BCM2835_DMA_CS);
+	printk("entered, val = %08x, in_replay = %d, irq = %d\n", val, in_replay, irq);
+	/* don't ack in irq handler ... */
 	if (in_replay) {
 		printk("catch our irq!!\n");
 		spin_lock_irqsave(&c->vc.lock, flags);
@@ -577,6 +582,7 @@ static irqreturn_t bcm2835_dma_callback(int irq, void *data)
 
 	/* Acknowledge interrupt */
 	/*writel(BCM2835_DMA_INT, c->chan_base + BCM2835_DMA_CS);*/
+	/*dma_readl(c->chan_base, BCM2835_DMA_CS);*/
 	dma_writel(BCM2835_DMA_INT, c->chan_base , BCM2835_DMA_CS);
 
 	d = c->desc;
@@ -706,6 +712,7 @@ static void bcm2835_dma_issue_pending(struct dma_chan *chan)
 	struct bcm2835_chan *c = to_bcm2835_dma_chan(chan);
 	unsigned long flags;
 
+	printk("issuing on %d channel...\n", c->ch);
 	spin_lock_irqsave(&c->vc.lock, flags);
 	if (vchan_issue_pending(&c->vc) && !c->desc)
 		bcm2835_dma_start_desc(c);
@@ -956,6 +963,11 @@ static int bcm2835_dma_chan_init(struct bcm2835_dmadev *d, int chan_id,
 	if (dma_readl(c->chan_base , BCM2835_DMA_DEBUG) &
 		BCM2835_DMA_DEBUG_LITE)
 		c->is_lite_channel = true;
+	/* lwg: global chan_base */
+	if (chan_id == 8) {
+		replay_dma_chan  = c->chan_base;
+		printk("lwg:%s:%d:set chan base to %p\n", __func__, __LINE__, replay_dma_chan);
+	}
 
 	return 0;
 }
@@ -993,6 +1005,7 @@ static struct dma_chan *bcm2835_dma_xlate(struct of_phandle_args *spec,
 	return chan;
 }
 
+
 static int bcm2835_dma_probe(struct platform_device *pdev)
 {
 	struct bcm2835_dmadev *od;
@@ -1028,6 +1041,7 @@ static int bcm2835_dma_probe(struct platform_device *pdev)
 		dev_err(&pdev->dev, "Failed to initialize the legacy API\n");
 
 	od->base = base;
+	printk("lwg:%s:%d:chan base = %p\n", __func__, __LINE__, base);
 
 	dma_cap_set(DMA_SLAVE, od->ddev.cap_mask);
 	dma_cap_set(DMA_PRIVATE, od->ddev.cap_mask);
@@ -1111,6 +1125,7 @@ static int bcm2835_dma_probe(struct platform_device *pdev)
 	}
 
 	dev_dbg(&pdev->dev, "Initialized %i DMA channels\n", i);
+	printk("lwg:%s:%d:Initialized %i DMA channels\n", __func__, __LINE__, i);
 
 	/* Device-tree DMA controller registration */
 	rc = of_dma_controller_register(pdev->dev.of_node,
@@ -1128,6 +1143,9 @@ static int bcm2835_dma_probe(struct platform_device *pdev)
 	}
 
 	dev_dbg(&pdev->dev, "Load BCM2835 DMA engine driver\n");
+
+	struct device *dev = &pdev->dev;
+	printk("dma dev @ %p, dma_pfn_off = %lx, dma_mask= %p, dma_off = %08x\n", dev, dev->dma_pfn_offset, dev->dma_mask, (dma_addr_t)dev->dma_pfn_offset <<PAGE_SHIFT);
 
 	return 0;
 

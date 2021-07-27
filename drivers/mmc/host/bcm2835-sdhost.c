@@ -62,6 +62,13 @@
 /* For mmc_card_blockaddr */
 #include "../core/card.h"
 
+void __iomem *replay_sdhost;
+EXPORT_SYMBOL(replay_sdhost);
+
+void __iomem *replay_dma_dev;
+EXPORT_SYMBOL(replay_dma_dev);
+
+
 #define STR(x) #x
 
 #define CHECK_DIVERGENCE() \
@@ -157,6 +164,8 @@
 
 int in_replay;
 EXPORT_SYMBOL(in_replay);
+
+extern void* replay_dma_chan;
 
 static int record = 1;
 
@@ -1661,6 +1670,7 @@ static irqreturn_t bcm2835_sdhost_irq(int irq, void *dev_id)
 	struct bcm2835_host *host = dev_id;
 	u32 intmask;
 	trace_printk("entered, irq = %d\n", irq);
+	printk("entered, irq = %d\n", irq);
 	if (in_replay) {
 		spin_lock(&host->lock);
 		dump_intr_controller();
@@ -2276,6 +2286,8 @@ void replay_dma_irq_callback(void) {
 }
 EXPORT_SYMBOL(replay_dma_irq_callback);
 
+
+
 static void replay_dma_read(struct bcm2835_host *host) {
 	u32 expected, val;
 
@@ -2426,6 +2438,7 @@ static void replay_dma_read(struct bcm2835_host *host) {
 	in_replay = 1;
 }
 
+
 static int replay_read_single_block(struct bcm2835_host *host, u32 block, int rw) {
 	u32 expected, val;
 
@@ -2493,8 +2506,8 @@ static void replay_tee(struct bcm2835_host *host) {
 static int mmc_replay_trigger(struct seq_file *s, void *unused) {
 	struct bcm2835_host *host = s->private;
 	/*replay_read_single_block(host, 0, 0);*/
-	/*replay_dma_read(host);*/
-	replay_tee(host);
+	replay_dma_read(host);
+	/*replay_tee(host);*/
 }
 
 static int mmc_replay_open(struct inode *inode, struct file *file) {
@@ -2524,6 +2537,9 @@ static int bcm2835_sdhost_probe(struct platform_device *pdev)
 
 	pr_debug("bcm2835_sdhost_probe\n");
 	mmc = mmc_alloc_host(sizeof(*host), dev);
+
+	printk("mmc host dev @ %p, dma_pfn_off = %lx, dma_mask= %p, dma_off = %08x\n", dev, dev->dma_pfn_offset, dev->dma_mask, (dma_addr_t)dev->dma_pfn_offset <<PAGE_SHIFT);
+
 	if (!mmc)
 		return -ENOMEM;
 
@@ -2647,12 +2663,16 @@ static int bcm2835_sdhost_probe(struct platform_device *pdev)
 
 	pr_debug("bcm2835_sdhost_probe -> OK\n");
 	trace_printk("probe end\n");
+	/* setup base */
+	replay_sdhost = host->ioaddr;
+	replay_dma_dev = host->mmc->parent;
 
 	/* replay trigger */
 	proc_create_data("mmc_replay", 0, NULL, &mmc_replay_ops, host);
 	in_replay = 0;
 
 	my_host = host;
+
 	printk("setting %p to procfs\n", host);
 	/* control trace_printk */
 	/*record = 0;*/

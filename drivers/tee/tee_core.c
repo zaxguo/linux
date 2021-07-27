@@ -26,6 +26,7 @@
 #include <crypto/hash.h>
 #include <crypto/sha.h>
 #include "tee_private.h"
+#include <linux/proc_fs.h>
 
 #define TEE_NUM_DEVICES	32
 
@@ -52,6 +53,8 @@ static DEFINE_SPINLOCK(driver_lock);
 
 static struct class *tee_class;
 static dev_t tee_devt;
+
+
 
 static int tee_open(struct inode *inode, struct file *filp)
 {

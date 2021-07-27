@@ -1208,8 +1208,10 @@ static int create_component(struct vchiq_mmal_instance *instance,
 	m.h.type = MMAL_MSG_TYPE_COMPONENT_CREATE;
 	/* lwg: XXX: annotate */
 	m.u.component_create.client_component = (u32)(unsigned long)component;
+#if 0
 	printk("lwg:%s:%d:phys addr of component = %08x (%p)\n", __func__, __LINE__, virt_to_phys(component), component);
 	hex_dump("component:", component, sizeof(struct vchiq_mmal_component));
+#endif
 	strncpy(m.u.component_create.name, name,
 		sizeof(m.u.component_create.name));
 
