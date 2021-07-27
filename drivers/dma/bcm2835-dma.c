@@ -554,9 +554,12 @@ static irqreturn_t bcm2835_dma_callback(int irq, void *data)
 	struct bcm2835_chan *c = data;
 	struct bcm2835_desc *d;
 	unsigned long flags;
-	trace_printk("entered\n");
 	u32 val = readl(c->chan_base + BCM2835_DMA_CS);
 	printk("entered, val = %08x, in_replay = %d, irq = %d\n", val, in_replay, irq);
+	/* are we in here at all even after irq disabled?? */
+	if (in_replay) {
+		while(1);
+	}
 	/* don't ack in irq handler ... */
 	if (in_replay) {
 		printk("catch our irq!!\n");

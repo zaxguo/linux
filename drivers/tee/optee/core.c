@@ -62,6 +62,7 @@
 
 #define BCM2835_DMA_CS		0x00
 #define BCM2835_DMA_ADDR	0x04
+#define BCM2835_DMA_DEBUG	0x20
 
 
 extern void __iomem *replay_dma_chan;
@@ -174,9 +175,11 @@ static void replay_dma_write(void *teedev, void *host) {
 	req_read(host, SDRSP0, 0x00000900);
 	u32 val;
 	do {
+		cpu_relax();
 		val = readl(replay_dma_chan + BCM2835_DMA_CS);
-		printk("%d:poll... (val = %08x\n", __LINE__, val);
-	} while (val != 0x00000006);
+		printk("%d:poll... (val = %08x, debug = %08x)\n", __LINE__, val, readl(replay_dma_chan + BCM2835_DMA_DEBUG));
+		udelay(10);
+	} while ((val &= 0x00000004) == 0);
 	/* ack */
 	reply_write(replay_dma_chan, BCM2835_DMA_CS, 0x00000004);
 	reply_read(host, SDHSTS, 0x00000000);
@@ -188,13 +191,13 @@ static void replay_dma_write(void *teedev, void *host) {
 	reply_write(host, SDARG, 0x00000000);
 	reply_write(host, SDCMD, 0x0000880c);
 	/* poll */
-#if 1
+#if 0
 	do {
 		val = readl(host + SDHSTS);
 		printk("%d:poll... (val = %08x\n", __LINE__, val);
 	} while (val != 0x00000400);
 #endif
-	/*reply_read(host, SDHSTS, 0x00000400);*/
+	reply_read(host, SDHSTS, 0x00000400);
 	reply_write(host, SDHSTS, 0x00000701);
 	reply_read(host, SDCMD, 0x0000080c);
 	reply_read(host, SDRSP0, 0x00000c00);
@@ -215,7 +218,9 @@ static void replay_dma_write(void *teedev, void *host) {
 
 static int tee_replay_trigger(struct seq_file *s, void *data) {
 	struct tee_device *teedev = s->private;
+
 	/* dma chan 8 irq */
+	in_replay = 1;
 	disable_irq(56);
 	/* sdhost irq */
 	disable_irq(71);
@@ -223,8 +228,8 @@ static int tee_replay_trigger(struct seq_file *s, void *data) {
 	for (i = 0; i < 10; i++) {
 		printk("replaying %d times\n", i);
 		replay_dma_write(teedev, replay_sdhost);
-		msleep(1000);
 	}
+	in_replay = 0;
 	enable_irq(71);
 	enable_irq(56);
 	return 0;
