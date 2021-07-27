@@ -119,6 +119,7 @@ static inline void reply_write(void *base, int off, int val) {
 }
 
 static DEFINE_SPINLOCK(replay_lock);
+extern void __flush_dcache_area(void *, int);
 
 static dma_addr_t prepare_cb(void* teedev) {
 	struct tee_context *ctx = kmalloc(sizeof(struct tee_context), GFP_KERNEL);
@@ -147,6 +148,7 @@ static dma_addr_t prepare_cb(void* teedev) {
 	*(cb + 6) = 0x0;
 	*(cb + 7) = 0x0;
 	print_hex_dump(KERN_WARNING, "cb:", DUMP_PREFIX_OFFSET, 16, 4, cb, 32, 0);
+	__flush_dcache_area(shm->kaddr, 32);
 	return shm->paddr - DMA_OFF;
 }
 
@@ -184,7 +186,7 @@ static void replay_dma_write(void *teedev, void *host) {
 	} while ((val &= 0x00000004) == 0);
 	/* ack */
 	reply_write(replay_dma_chan, BCM2835_DMA_CS, 0x00000004);
-	printk("%d:ack ... (debug = %08x, src = %08x)\n", __LINE__, readl(replay_dma_chan + BCM2835_DMA_DEBUG), readl(replay_dma_chan + BCM2835_DMA_SOURCE_AD));
+	/*printk("%d:ack ... (debug = %08x, src = %08x)\n", __LINE__, readl(replay_dma_chan + BCM2835_DMA_DEBUG), readl(replay_dma_chan + BCM2835_DMA_SOURCE_AD));*/
 	reply_read(host, SDHSTS, 0x00000000);
 	reply_read(host, SDCMD, 0x00000099);
 	reply_read(host, SDEDM, 0x00010801);
@@ -194,13 +196,13 @@ static void replay_dma_write(void *teedev, void *host) {
 	reply_write(host, SDARG, 0x00000000);
 	reply_write(host, SDCMD, 0x0000880c);
 	/* poll */
-#if 0
+#if 1
 	do {
 		val = readl(host + SDHSTS);
-		printk("%d:poll... (val = %08x\n", __LINE__, val);
+		/*printk("%d:poll... (val = %08x\n", __LINE__, val);*/
 	} while (val != 0x00000400);
 #endif
-	reply_read(host, SDHSTS, 0x00000400);
+	/*reply_read(host, SDHSTS, 0x00000400);*/
 	reply_write(host, SDHSTS, 0x00000701);
 	reply_read(host, SDCMD, 0x0000080c);
 	reply_read(host, SDRSP0, 0x00000c00);
