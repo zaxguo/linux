@@ -555,7 +555,7 @@ static irqreturn_t bcm2835_dma_callback(int irq, void *data)
 	struct bcm2835_desc *d;
 	unsigned long flags;
 	u32 val = readl(c->chan_base + BCM2835_DMA_CS);
-	printk("entered, val = %08x, in_replay = %d, irq = %d\n", val, in_replay, irq);
+	/*printk("entered, val = %08x, in_replay = %d, irq = %d\n", val, in_replay, irq);*/
 	/* are we in here at all even after irq disabled?? */
 	if (in_replay) {
 		while(1);
@@ -715,7 +715,7 @@ static void bcm2835_dma_issue_pending(struct dma_chan *chan)
 	struct bcm2835_chan *c = to_bcm2835_dma_chan(chan);
 	unsigned long flags;
 
-	printk("issuing on %d channel...\n", c->ch);
+	/*printk("issuing on %d channel...\n", c->ch);*/
 	spin_lock_irqsave(&c->vc.lock, flags);
 	if (vchan_issue_pending(&c->vc) && !c->desc)
 		bcm2835_dma_start_desc(c);

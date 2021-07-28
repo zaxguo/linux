@@ -2326,7 +2326,9 @@ static const struct file_operations loop_ctl_fops = {
 
 static btt_e enigma_dump_emu_disk(btt_e blk) {
 	struct arm_smccc_res res;
-	arm_smccc_smc(ENIGMA_SMC_CALL, ENIGMA_LOOKUP_BTT, (uint32_t) blk, 0, 0x0, 0x0, 0x0, 0x0, &res);
+	/*arm_smccc_smc(ENIGMA_SMC_CALL, ENIGMA_LOOKUP_BTT, (uint32_t) blk, 0, 0x0, 0x0, 0x0, 0x0, &res);*/
+	/* lwg: fast call path blocks all irq. good for polling  */
+	arm_smccc_smc(ENIGMA_FAST_CALL, ENIGMA_LOOKUP_BTT, (uint32_t) blk, 0, 0x0, 0x0, 0x0, 0x0, &res);
 	return res.a0;
 }
 
