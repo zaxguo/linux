@@ -55,6 +55,7 @@
 #include "vchiq_connected.h"
 #include "vchiq_killable.h"
 #include "vchiq_pagelist.h"
+#include "replay.h"
 
 #define MAX_FRAGMENTS (VCHIQ_NUM_CURRENT_BULKS * 2)
 
@@ -63,6 +64,7 @@
 
 #define BELL0	0x00
 #define BELL2	0x08
+
 
 #define MAX_SEGS 200
 struct dump_cb {
@@ -74,6 +76,8 @@ struct dump_cb {
 	void *stash[MAX_SEGS];
 	int flags[MAX_SEGS];
 };
+
+extern void *replay_teedev;
 
 struct replay_cb {
 	/* slot mem */
@@ -391,7 +395,7 @@ static int start_replay(void) {
 		}
 		idx++;
 	} while (idx != -1);
-#endif 
+#endif
 
 	return 0;
 }
@@ -551,7 +555,7 @@ static int *search_message(int magic, int type, void *virt, int size) {
 		int *tmp = (int *)(virt + k);
 		int *cxt = tmp + 1;
 		if (*tmp == magic) {
-			printk("found magic, cxt = %08x\n", *cxt);
+			/*printk("found magic, cxt = %08x\n", *cxt);*/
 			if (*cxt == type) {
 				print_hex_dump(KERN_WARNING, "search: ",DUMP_PREFIX_OFFSET, 16, 4, tmp, 256, 0);
 				return tmp;
@@ -562,6 +566,7 @@ static int *search_message(int magic, int type, void *virt, int size) {
 }
 
 int rx_size = 0;
+dma_addr_t replay_pglist = 0;
 
 static void peek_dma_buf() {
 	struct vchiq_pagelist_info *pagelistinfo;
@@ -579,20 +584,15 @@ static void peek_dma_buf() {
 
 	/* first page */
 	int i = 0;
-	int found = 0;
 	for (i = 0; i < num_pages; i++) {
 		struct page *page = pages[i];
 		void *dat = page_to_virt(page);
 		int ret = 0;
 		if (i == 0) {
-			printk("dumping 128 Bytes of first page..\n");
+			printk("dumping 128 Bytes of first data page..\n");
 			print_hex_dump(KERN_WARNING, "page: ",DUMP_PREFIX_OFFSET, 16, 4, dat, 128, 1);
+			break;
 		}
-	}
-	if (found) {
-		printk("found jpg magci!!\n");
-	} else {
-		printk("did not found jpg magci!!\n");
 	}
 	return;
 }
@@ -658,6 +658,7 @@ static void *alloc_pagelist(int size) {
 	pagelistinfo->scatterlist_mapped = 0;
 
 	printk("alloc pagelist at %08x, num_pages = %d\n", dma_addr, num_pages);
+	replay_pglist = dma_addr;
 
 	/*void *buf = kvmalloc(count, GFP_KERNEL);*/
 	void *buf = vmalloc(count);
@@ -713,7 +714,7 @@ static void *alloc_pagelist(int size) {
 		printk("cannot alloc enough DMA pages (%d != %d)!???\n", dma_buffers, num_pages);
 	}
 
-	printk("fill out rx buffer...\n");
+	/*printk("fill out rx buffer...\n");*/
 	k = 0;
 	for_each_sg(scatterlist, sg, dma_buffers, i) {
 		u32 len = sg_dma_len(sg);
@@ -721,7 +722,8 @@ static void *alloc_pagelist(int size) {
 		addrs[k++] = (addr & PAGE_MASK) |
 				(((len + PAGE_SIZE - 1) >> PAGE_SHIFT) - 1);
 	}
-	printk("done!\n");
+	/*printk("done!\n");*/
+	print_hex_dump(KERN_WARNING, "pagelist: ",DUMP_PREFIX_OFFSET, 16, 4, pagelist, 128, 0);
 	g_pagelist = pagelist;
 out:
 	return pagelist;
@@ -736,20 +738,32 @@ static int replay_trigger(int type, int idx) {
 
 	/* bulk_rx */
 	if (idx == 99) {
+		int off = off_100;
+		void *head = replay->slot + off;
+		int *msg_head = (int *)head;
+		if (*(msg_head + 1) == 0x0012c66c) {
+			*msg_head = replay_pglist;
+			*(msg_head + 1) = rx_size;
+			print_hex_dump(KERN_WARNING, "search: ",DUMP_PREFIX_OFFSET, 16, 4, msg_head - 2, 48, 0);
+		} else {
+			printk("divergence!!%d\n", __LINE__);
+		}
+#if 0
 		int *size = search_page_reverse(0xf7058000, replay->slot + slot_dump_size, slot_dump_size);
 		if (size) {
 			/* modify size of bulk_rx */
 			*(size + 1) = rx_size;
-			print_hex_dump(KERN_WARNING, "search: ",DUMP_PREFIX_OFFSET, 16, 4, size, 48, 0);
+			printk("rx size = %08x @ %p-%p\n", rx_size, replay->slot, (void *)size);
+			/*print_hex_dump(KERN_WARNING, "search: ",DUMP_PREFIX_OFFSET, 16, 4, size, 48, 0);*/
 		} else {
 			printk("did not find magic number!!!! should abort!\n");
 			return;
 		}
-
+#endif
 	}
 
 	/* hardcoded, after bulk rx done */
-	if (idx == 101) {
+	if (idx == 102) {
 		peek_dma_buf();
 	}
 
@@ -769,16 +783,32 @@ static int replay_trigger(int type, int idx) {
 			}
 			/* buffer_to_host */
 			if (idx == 98) {
+#if 1
+				int off = buffer_to_host_98;
+				void *head = replay->slot + off;
+				int *msg_head = (int *)head;
+				if (check_msg_header(msg_head, 0xc)) {
+					rx_size = *(msg_head + 19);
+					printk("rx size = %08x @ %p-%p\n", rx_size, replay->slot, (msg_head + 19)) ;
+					PAGELIST_T *pg = alloc_pagelist(rx_size);
+				} else {
+					printk("divergence!!%d\n", __LINE__);
+					print_hex_dump(KERN_WARNING, "search: ",DUMP_PREFIX_OFFSET, 16, 4, msg_head, 128, 1);
+					return;
+				}
+#endif
+#if 0
 				int *head = search_message(0x6c616d6d, 0xc, replay->slot, slot_dump_size);
 				/* on-demand mem alloc */
 				if (head) {
 					rx_size = *(head + 19);
-					printk("rx size = %08x\n", rx_size);
+					printk("rx size = %08x @ %p-%p\n", rx_size, replay->slot, (void *)head);
 					PAGELIST_T *pg = alloc_pagelist(rx_size);
 				} else {
 					printk("did not find magic number!!!! should abort!\n");
 					return;
 				}
+#endif
 			}
 			break;
 		case 0x1:
@@ -851,10 +881,31 @@ int vchiq_platform_init(struct platform_device *pdev, VCHIQ_STATE_T *state)
 		printk("alloc %08x at %08x\n", size, tmp);
 	}
 #endif
-
-	/* lwg: of course its DMA address */
-	slot_mem = dmam_alloc_coherent(dev, slot_mem_size + frag_mem_size,
-				       &slot_phys, GFP_KERNEL);
+#if 0
+	if (replay_teedev) {
+		struct tee_context *ctx = kmalloc(sizeof(struct tee_context), GFP_KERNEL);
+		ctx->teedev = replay_teedev;
+		INIT_LIST_HEAD(&ctx->list_shm);
+		struct tee_shm *shm = tee_shm_alloc(ctx, slot_mem_size + frag_mem_size, TEE_SHM_MAPPED | TEE_SHM_DMA_BUF);
+		/* try kernel shm first */
+		if (!IS_ERR(shm)) {
+			slot_mem = shm->kaddr;
+			printk("slot mem allocated from shm!!\n");
+		} else {
+			/* retreat to system DRAM */
+			slot_mem = dmam_alloc_coherent(dev, slot_mem_size + frag_mem_size,
+							   &slot_phys, GFP_KERNEL);
+			printk("slot mem allocated from DMA!!\n");
+		}
+	} else {
+			/* retreat to system DRAM */
+			slot_mem = dmam_alloc_coherent(dev, slot_mem_size + frag_mem_size, &slot_phys, GFP_KERNEL);
+			printk("slot mem allocated from DMA!!\n");
+	}
+#endif
+	/* retreat to system DRAM */
+	slot_mem = dmam_alloc_coherent(dev, slot_mem_size + frag_mem_size, &slot_phys, GFP_KERNEL);
+	printk("slot mem allocated from DMA!!\n");
 
 	printk("slot dma phys = %08x, phys = %08x, virt = %p, real_virt = %p\n", slot_phys, dma_to_phys(dev, slot_phys), phys_to_virt(dma_to_phys(dev, slot_phys)), slot_mem);
 
@@ -1141,6 +1192,10 @@ static void handle_replay_irq(void) {
 	struct elf_phdr *phdr = (struct elf_phdr *)(replay->head + idx);
 	size = phdr->p_memsz;
 	off = phdr->p_offset;
+	if (idx == replay->segs) {
+		printk("!! running out of segs..\n");
+		return;
+	}
 	printk("to cmp two mem dump of seg = %d, size = %08x\n", idx, size);
 	void *buf = kvmalloc(size, GFP_KERNEL);
 	if (IS_ERR(buf)) {

@@ -145,7 +145,7 @@ int32_t dwc_otg_hcd_handle_intr(dwc_otg_hcd_t * dwc_otg_hcd)
 #endif
 		hfnum.d32 = DWC_READ_REG32(&dwc_otg_hcd->core_if->host_if->host_global_regs->hfnum);
 		if (gintsts.b.sofintr) {
-			trace_printk("sof.\n");
+			/*trace_printk("sof.\n");*/
 			retval |= dwc_otg_hcd_handle_sof_intr(dwc_otg_hcd);
 		}
 

@@ -45,6 +45,10 @@
 
 #define MAX_BCM2835_CAMERAS 2
 
+#define MAX_FRAMES 1
+int frame_cnt = 0;
+
+
 MODULE_DESCRIPTION("Broadcom 2835 MMAL video capture");
 MODULE_AUTHOR("Vincent Sanders");
 MODULE_LICENSE("GPL");

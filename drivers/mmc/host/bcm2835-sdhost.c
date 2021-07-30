@@ -1670,7 +1670,7 @@ static irqreturn_t bcm2835_sdhost_irq(int irq, void *dev_id)
 	struct bcm2835_host *host = dev_id;
 	u32 intmask;
 	trace_printk("entered, irq = %d\n", irq);
-	printk("entered, irq = %d\n", irq);
+	/*printk("entered, irq = %d\n", irq);*/
 	if (in_replay) {
 		spin_lock(&host->lock);
 		dump_intr_controller();

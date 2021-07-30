@@ -69,6 +69,8 @@
 extern void __iomem *replay_dma_chan;
 extern void __iomem *replay_sdhost;
 extern int in_replay;
+void *replay_teedev;
+EXPORT_SYMBOL(replay_teedev);
 
 /* test shm mem DMA-ability */
 static void test_shm(struct tee_device *dev, int size) {
@@ -219,7 +221,6 @@ static void replay_dma_write(void *teedev, void *host) {
 	req_read(host, SDRSP0, 0x00000900);
 	/*spin_unlock_irqrestore(&replay_lock, flags);*/
 }
-
 
 static int tee_replay_trigger(struct seq_file *s, void *data) {
 	struct tee_device *teedev = s->private;
@@ -619,6 +620,9 @@ optee_config_shm_memremap(optee_invoke_fn *invoke_fn, void **memremaped_shm)
 	}
 
 	va = memremap(paddr, size, MEMREMAP_WB);
+	/* lwg: MEMREMAP_WC cannot be used as was in
+	 * drivers/base/dma-coherent.c to use early coherent DMA mem */
+	/*va = memremap(paddr, size, MEMREMAP_WC);*/
 	if (!va) {
 		pr_err("shared memory ioremap failed\n");
 		return ERR_PTR(-EINVAL);
@@ -769,6 +773,7 @@ static struct optee *optee_probe(struct device_node *np)
 
 	pr_info("initialized driver\n");
 
+	replay_teedev = teedev;
 	proc_create_data("tee_replay", 0, NULL, &tee_replay_ops, teedev);
 	printk("proc create... teedev = %p\n", teedev);
 
