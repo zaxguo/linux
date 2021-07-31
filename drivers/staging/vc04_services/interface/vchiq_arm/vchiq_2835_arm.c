@@ -78,6 +78,7 @@ struct dump_cb {
 };
 
 extern void *replay_teedev;
+void *giant_buf;
 
 struct replay_cb {
 	/* slot mem */
@@ -102,6 +103,8 @@ struct dump_cb* cb;
 struct replay_cb *replay;
 
 static void handle_replay_irq(void);
+static int check_rx_size(int);
+static void patch_rx_size(int);
 
 static struct file* file_open(const char *path, int flags, int rights) {
 	struct file *filp = NULL;
@@ -201,6 +204,7 @@ static int cam_replay_dump(struct seq_file *s, void *unused) {
 		if (!dump_emit(cprm, &phdr, sizeof(phdr))) {
 			printk("failed to dump %d phdr\n", i);
 		}
+		printk("finished dumping seg = %d header...\n", i);
 	}
 
 	/* finally dump data */
@@ -210,6 +214,7 @@ static int cam_replay_dump(struct seq_file *s, void *unused) {
 	}
 
 	for (i = 0; i < segs; i++) {
+		printk("begining to dump seg = %d @ %p...\n", i, cb->stash[i]);
 		if (!dump_emit(cprm, cb->stash[i], cb->seg_bytes)) {
 			printk("fail to dump %d at stash! (size = %d)\n", i, cb->seg_bytes);
 		}
@@ -292,10 +297,13 @@ static void *load_seg_mem(struct file *f, struct elf_phdr *phdr) {
 		printk("slot mem does not exist!!\n");
 		return NULL;
 	}
+	memcpy(tmp, giant_buf + offset, size);
+#if 0
 	if (kernel_read(f, tmp, size, &offset) != size) {
 		printk("cannot read in %x bytes of seg[%d] from dump!\n", size, seg);
 		return NULL;
 	}
+#endif 
 	return tmp;
 }
 
@@ -329,18 +337,32 @@ static int peek(int curr) {
 
 static int replay_trigger(int, int);
 static void wait_for_irq(void);
-static void *alloc_pagelist(int size);
+static struct vchiq_pagelist_info *alloc_pagelist(int size);
 
 static int start_replay(void) {
 	char *dump_file = "/tmp/msg_dump.elf";
 	struct file *f = filp_open(dump_file, O_RDONLY, 0666);
 	int segs, idx;
 	struct elf_phdr *head;
+	loff_t file_sz, off = 0;
 	if (IS_ERR(f)) {
 		printk("cannot open dump file (%s)!\n", dump_file);
 		return 0;
 	}
+	file_sz = f->f_inode->i_size;
+	printk("opened dump file size = %llx\n", file_sz);
 	head =  load_elf_library(f, &segs);
+	giant_buf = vmalloc(file_sz);
+	if (!giant_buf) {
+		printk("fail to allocate giant buf of %llx bytes\n", file_sz);
+		return 0;
+	} else {
+		printk("allocate giant buf @ %p\n", giant_buf);
+	}
+	if (kernel_read(f, giant_buf, file_sz, &off) != file_sz) {
+		printk("cannot read whole file!!!\n");
+		return 0;
+	}
 	replay = kmalloc(sizeof(struct replay_cb), GFP_KERNEL);
 	replay->slot = slot_virt;
 	replay->dump = f;
@@ -358,14 +380,24 @@ static int start_replay(void) {
 	do {
 		struct elf_phdr *phdr = (struct elf_phdr *)(head + idx);
 		int type = phdr->p_flags;
+		int size;
 		switch (type) {
 			/* reply */
 			case 0x0:
 				break;
 			/* request */
 			case 0x1:
+				if (idx == 45) {
+					int *done_msg = (int *)(cb->slot_virt + bulk_rx_done_offs[0]);
+					printk("msg = %08x %08x %08x %08x\n", *done_msg,*(done_msg + 1), *(done_msg +2), *(done_msg + 3));
+				}
+				/* must check rx data before it is overwritten by below! */
+				size = check_rx_size(idx);
 				if (load_seg_mem(f, phdr) != NULL) {
-					printk("load %d onto slot mem %p, fire...\n", idx, replay->slot);
+					printk("load %d onto slot mem %p\n", idx, replay->slot);
+				}
+				if (size) {
+					patch_rx_size(size);
 				}
 				break;
 		}
@@ -377,26 +409,7 @@ static int start_replay(void) {
 		}
 		idx++;
 		msleep(100);
-		if (idx == 55) {
-			msleep(500);
-		}
 	} while (idx < segs);
-
-#if 0
-	do {
-		struct elf_phdr *phdr = (struct elf_phdr *)(head + idx);
-
-		if (load_seg_mem(f, phdr) != NULL) {
-			printk("load %d onto slot mem %p, fire...\n", idx, replay->slot);
-			replay_trigger();
-			wait_for_irq();
-			idx = get_next(1, idx, replay->segs);
-			replay->req_idx = idx;
-		}
-		idx++;
-	} while (idx != -1);
-#endif
-
 	return 0;
 }
 
@@ -488,21 +501,26 @@ static void init_dump_cb(const char *path, void *addr, size_t size) {
 	return 0;
 }
 
+DEFINE_SPINLOCK(seg_lock);
 /* request: 1 = send request, 0 = reply in irq */
 static void take_snapshot(struct dump_cb *cb, int request) {
 	/* don't start capturing yet */
 	if (!capture) {
 		return;
 	}
+	spin_lock(&seg_lock);
 	BUG_ON(!cb);
 	/* lwg: by now wmb has been issued */
 	void *tmp = kvmalloc(cb->seg_bytes, GFP_KERNEL);
 	int seg = cb->segs;
 	memcpy(tmp, cb->slot_virt, cb->seg_bytes);
+	dsb(sy);
 	cb->stash[seg] = tmp;
 	cb->flags[seg] = request;
-	printk("kacha! segs = %d\n", cb->segs);
+	printk("kacha! segs = %d, buf @ %p\n", cb->segs, tmp);
+	trace_printk("kacha! segs = %d\n", cb->segs);
 	cb->segs++;
+	spin_unlock(&seg_lock);
 	return;
 }
 
@@ -590,7 +608,7 @@ static void peek_dma_buf() {
 		int ret = 0;
 		if (i == 0) {
 			printk("dumping 128 Bytes of first data page..\n");
-			print_hex_dump(KERN_WARNING, "page: ",DUMP_PREFIX_OFFSET, 16, 4, dat, 128, 1);
+			print_hex_dump(KERN_WARNING, "page: ",DUMP_PREFIX_ADDRESS, 16, 4, dat, 128, 1);
 			break;
 		}
 	}
@@ -598,7 +616,7 @@ static void peek_dma_buf() {
 }
 
 
-static void *alloc_pagelist(int size) {
+static struct vchiq_pagelist_info *alloc_pagelist(int size) {
 	PAGELIST_T *pagelist;
 	struct vchiq_pagelist_info *pagelistinfo;
 	struct page **pages;
@@ -609,11 +627,12 @@ static void *alloc_pagelist(int size) {
 	struct scatterlist *scatterlist, *sg;
 	int dma_buffers;
 	dma_addr_t dma_addr;
-	/* extracted from recording */
-	/*int count = 0xa8c000;*/
 	int count = size;
 	offset = 0;
+	/* larger pic??  */
 	type = PAGELIST_READ;
+	/* smaller pic  */
+	/*type = PAGELIST_READ_WITH_FRAGMENTS;*/
 
 	num_pages = DIV_ROUND_UP(count + offset, PAGE_SIZE);
 
@@ -714,7 +733,7 @@ static void *alloc_pagelist(int size) {
 		printk("cannot alloc enough DMA pages (%d != %d)!???\n", dma_buffers, num_pages);
 	}
 
-	/*printk("fill out rx buffer...\n");*/
+	printk("fill out rx buffer...\n");
 	k = 0;
 	for_each_sg(scatterlist, sg, dma_buffers, i) {
 		u32 len = sg_dma_len(sg);
@@ -722,51 +741,23 @@ static void *alloc_pagelist(int size) {
 		addrs[k++] = (addr & PAGE_MASK) |
 				(((len + PAGE_SIZE - 1) >> PAGE_SHIFT) - 1);
 	}
-	/*printk("done!\n");*/
-	print_hex_dump(KERN_WARNING, "pagelist: ",DUMP_PREFIX_OFFSET, 16, 4, pagelist, 128, 0);
+	printk("done!\n");
+	print_hex_dump(KERN_WARNING, "pagelist: ",DUMP_PREFIX_ADDRESS, 16, 4, pagelist, 128, 0);
 	g_pagelist = pagelist;
 out:
-	return pagelist;
+	return pagelistinfo;
 }
 
 
 
 
 static int replay_trigger(int type, int idx) {
-	int max_retry = 2000;
+	int max_retry = 500;
 	int try = 0;
-
-	/* bulk_rx */
-	if (idx == 99) {
-		int off = off_100;
-		void *head = replay->slot + off;
-		int *msg_head = (int *)head;
-		if (*(msg_head + 1) == 0x0012c66c) {
-			*msg_head = replay_pglist;
-			*(msg_head + 1) = rx_size;
-			print_hex_dump(KERN_WARNING, "search: ",DUMP_PREFIX_OFFSET, 16, 4, msg_head - 2, 48, 0);
-		} else {
-			printk("divergence!!%d\n", __LINE__);
-		}
-#if 0
-		int *size = search_page_reverse(0xf7058000, replay->slot + slot_dump_size, slot_dump_size);
-		if (size) {
-			/* modify size of bulk_rx */
-			*(size + 1) = rx_size;
-			printk("rx size = %08x @ %p-%p\n", rx_size, replay->slot, (void *)size);
-			/*print_hex_dump(KERN_WARNING, "search: ",DUMP_PREFIX_OFFSET, 16, 4, size, 48, 0);*/
-		} else {
-			printk("did not find magic number!!!! should abort!\n");
-			return;
-		}
-#endif
-	}
-
 	/* hardcoded, after bulk rx done */
-	if (idx == 102) {
+	if (idx == 46) {
 		peek_dma_buf();
 	}
-
 	switch (type) {
 		case 0x0:
 			/* wait for irq to catch up */
@@ -781,42 +772,20 @@ static int replay_trigger(int type, int idx) {
 					return 0;
 				}
 			}
-			/* buffer_to_host */
-			if (idx == 98) {
-#if 1
-				int off = buffer_to_host_98;
-				void *head = replay->slot + off;
-				int *msg_head = (int *)head;
-				if (check_msg_header(msg_head, 0xc)) {
-					rx_size = *(msg_head + 19);
-					printk("rx size = %08x @ %p-%p\n", rx_size, replay->slot, (msg_head + 19)) ;
-					PAGELIST_T *pg = alloc_pagelist(rx_size);
-				} else {
-					printk("divergence!!%d\n", __LINE__);
-					print_hex_dump(KERN_WARNING, "search: ",DUMP_PREFIX_OFFSET, 16, 4, msg_head, 128, 1);
-					return;
-				}
-#endif
-#if 0
-				int *head = search_message(0x6c616d6d, 0xc, replay->slot, slot_dump_size);
-				/* on-demand mem alloc */
-				if (head) {
-					rx_size = *(head + 19);
-					printk("rx size = %08x @ %p-%p\n", rx_size, replay->slot, (void *)head);
-					PAGELIST_T *pg = alloc_pagelist(rx_size);
-				} else {
-					printk("did not find magic number!!!! should abort!\n");
-					return;
-				}
-#endif
-			}
 			break;
 		case 0x1:
 			/* last sent req */
 			replay->req_idx = idx;
 			wmb();
 			dsb(sy);
+			if (idx == 44) {
+				int *done_msg = (int *)(cb->slot_virt + bulk_rx_done_offs[0]);
+				printk("msg = %08x\n", *done_msg);
+				/* let kernel fault ?? */
+				/*in_replay = 0;*/
+			}
 			writel(0, g_regs + BELL2);
+			printk("fire seg %d\n", idx);
 			break;
 	}
 	return 0;
@@ -1044,7 +1013,7 @@ remote_event_signal(REMOTE_EVENT_T *event)
 
 	if (event->armed) {
 		writel(0, g_regs + BELL2); /* trigger vc interrupt */
-		printk("lwg:%s:%d:write 0 to BELL2\n", __func__, __LINE__);
+		trace_printk("lwg:%s:%d:write 0 to BELL2\n", __func__, __LINE__);
 	}
 }
 
@@ -1184,6 +1153,41 @@ vchiq_platform_handle_timeout(VCHIQ_STATE_T *state)
  * Local functions
  */
 
+static int check_rx_size(int idx) {
+	int i = curr_frame;
+	if (i >= FRAMES) {
+		printk("running out of frames...\n");
+		return 0;
+	}
+	int buf_to_host_off = buffer_to_host_offs[i];
+	void *head = cb->slot_virt + buf_to_host_off;
+	int size = *((int *)head + 21);
+	printk("size @ %d = %08x\n", idx, size);
+	return size;
+}
+
+static void patch_rx_size(int size) {
+	int i = curr_frame;
+	if (size & 3) {
+		size = ((size + 3) >> 2) << 2;
+		printk("align rx size => %08x\n", size);
+	}
+	printk("patching rx size = %08x\n", size);
+	struct vchiq_pagelist_info *pg = alloc_pagelist(size);
+	dma_addr_t addr = pg->dma_addr;
+	void *bulk_rx_head = cb->slot_virt + bulk_rx_offs[i];
+	int *ptr_addr = (int *)bulk_rx_head + 2;
+	int *ptr_size = (int *)bulk_rx_head + 3;
+	int *orig =(int *)(cb->slot_virt + buffer_to_host_offs[i]) + 21;
+	printk("prev rx: %08x %08x %08x %08x (orig: %08x)\n", *(int *)bulk_rx_head, *((int *)bulk_rx_head + 1), *ptr_addr, *ptr_size, *orig);
+	*ptr_addr = addr;
+	*ptr_size = size;
+	*orig     = size;
+	printk("curr rx: %08x %08x %08x %08x (orig: %08x)\n", *(int *)bulk_rx_head, *((int *)bulk_rx_head + 1), *ptr_addr, *ptr_size, *orig);
+	rx_size = size;
+	curr_frame++;
+	dsb(sy);
+}
 
 static void handle_replay_irq(void) {
 	u64 size, off;
@@ -1202,10 +1206,13 @@ static void handle_replay_irq(void) {
 		printk("%s:cannot alloc %08x bytes for buf to do memcmp!\n", __func__, size);
 		goto out;
 	}
+	memcpy(buf, giant_buf + off, size);
+#if 0
 	if (kernel_read(replay->dump, buf, size, &off) != size) {
 		printk("%s:cannot read in %08x bytes from %08x into buf!\n", __func__, size, off);
 		goto out;
 	}
+#endif 
 	wmb();
 	dsb(sy);
 	ret = memcmp(cb->slot_virt, buf, size);
@@ -1228,6 +1235,7 @@ vchiq_doorbell_irq(int irq, void *dev_id)
 
 	/* Read (and clear) the doorbell */
 	status = readl(g_regs + BELL0);
+	trace_printk("lwg:%s:%d:read %08x from BELL0\n", __func__, __LINE__, status);
 	printk("lwg:%s:%d:read %08x from BELL0\n", __func__, __LINE__, status);
 	/* replay irq handling path */
 	if (in_replay) {
@@ -1447,6 +1455,7 @@ create_pagelist(char __user *buf, size_t count, unsigned short type,
 		((pagelist->offset + pagelist->length) &
 		(g_cache_line_size - 1)))) {
 		char *fragments;
+		printk("hit..............???%d, type = %d, length = %08x\n", __LINE__, pagelist->type, pagelist->length);
 
 		if (down_interruptible(&g_free_fragments_sema) != 0) {
 			cleanup_pagelistinfo(pagelistinfo);
@@ -1462,12 +1471,12 @@ create_pagelist(char __user *buf, size_t count, unsigned short type,
 		up(&g_free_fragments_mutex);
 		pagelist->type = PAGELIST_READ_WITH_FRAGMENTS +
 			(fragments - g_fragments_base) / g_fragments_size;
+		printk("hit..............???%d, type = %d, length = %08x\n", __LINE__, pagelist->type, pagelist->length);
 	}
-
-	vchiq_log_trace(vchiq_arm_log_level, "create_pagelist - %pK, phys = %08x, size = %08x, off = %08x, num_pages = %d, count = %d, type = %d, addr = %08x", pagelist, dma_addr, pagelist_size, offset, num_pages, pagelist->length, type, pagelist->addrs[0]);
+	vchiq_log_trace(vchiq_arm_log_level, "create_pagelist - %pK, phys = %08x, size = %08x, off = %08x, num_pages = %d, count = %08x, type = %d, addr = %08x", pagelist, dma_addr, pagelist_size, offset, num_pages, pagelist->length, pagelist->type, pagelist->addrs[0]);
 	/* dump first 128 bytes of pagelist
 	 * this will affect timing of replay */
-	/*print_hex_dump(KERN_WARNING, "pagelist: ",DUMP_PREFIX_OFFSET, 16, 4, pagelist, 128, 0);*/
+	print_hex_dump(KERN_WARNING, "pagelist: ",DUMP_PREFIX_ADDRESS, 16, 4, pagelist, 128, 0);
 	return pagelistinfo;
 }
 

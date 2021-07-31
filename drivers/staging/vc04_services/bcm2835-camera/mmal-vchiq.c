@@ -130,15 +130,16 @@ static const char *const port_action_type_names[] = {
 
 #if defined(DEBUG)
 #if defined(FULL_MSG_DUMP)
+/* lwg: output to trace instead... */
 #define DBG_DUMP_MSG(MSG, MSG_LEN, TITLE)				\
 	do {								\
 		printk(TITLE" type:%s(%d) length:%d\n",		\
 			 msg_type_names[(MSG)->h.type],			\
 			 (MSG)->h.type, (MSG_LEN));			\
-		print_hex_dump(KERN_DEBUG, "<<h: ", DUMP_PREFIX_OFFSET,	\
+		print_hex_dump(KERN_DEBUG, "<<h: ", DUMP_PREFIX_ADDRESS,	\
 			       16, 4, (MSG),				\
 			       sizeof(struct mmal_msg_header), 1);	\
-		print_hex_dump(KERN_DEBUG, "<<p: ", DUMP_PREFIX_OFFSET,	\
+		print_hex_dump(KERN_DEBUG, "<<p: ", DUMP_PREFIX_ADDRESS,	\
 			       16, 4,					\
 			       ((u8 *)(MSG)) + sizeof(struct mmal_msg_header),\
 			       (MSG_LEN) - sizeof(struct mmal_msg_header), 1); \
@@ -595,7 +596,7 @@ buffer_from_host(struct vchiq_mmal_instance *instance,
 		/*m.u.buffer_from_host.buffer_header.data = 0xdeadbeef;*/
 	} else {
 		/* dump some info */
-		printk("lwg:%s:%d:phys addr of buffer = %08x, size = %08x\n", __func__, __LINE__, virt_to_phys(buf->buffer), buf->buffer_size);
+		/*trace_printk("lwg:%s:%d:phys addr of buffer = %08x, size = %08x\n", __func__, __LINE__, virt_to_phys(buf->buffer), buf->buffer_size);*/
 		print_hex_dump(KERN_WARNING, "buf data:", DUMP_PREFIX_OFFSET,
 				16, 4, buf->buffer, 64, 1);
 	}
@@ -1029,7 +1030,7 @@ static void port_to_mmal_msg(struct vchiq_mmal_port *port, struct mmal_port *p)
 	 * kernel addr is linearly mapped, can directly take out lower 4B as paddr */
 	/*p->userdata = (u32)(unsigned long)port;*/
 	p->userdata = (u32)(unsigned long)0xdeadbeef;
-	printk("lwg:%s:%d:phys addr of port = %08x (%p), seg = %d\n", __func__, __LINE__, virt_to_phys(port), port, offsetof(struct mmal_port, userdata), get_curr_cb_seg());
+	trace_printk("lwg:%s:%d:phys addr of port = %08x (%p), seg = %d\n", __func__, __LINE__, virt_to_phys(port), port, offsetof(struct mmal_port, userdata), get_curr_cb_seg());
 	/*hex_dump("port:", port, sizeof(struct vchiq_mmal_port));*/
 }
 
@@ -2105,7 +2106,9 @@ int vchiq_mmal_init(struct vchiq_mmal_instance **out_instance)
 		.tx_fifo_size		= 0,
 		.callback		= service_callback,
 		.callback_param		= NULL,
+		/* lwg -- why?? -- turning off only gives us odd bytes */
 		.want_unaligned_bulk_rx = 1,
+		/*.want_unaligned_bulk_rx = 1,*/
 		.want_unaligned_bulk_tx = 1,
 		.want_crc		= 0
 	};

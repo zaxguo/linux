@@ -572,7 +572,7 @@ reserve_space(VCHIQ_STATE_T *state, size_t space, int is_blocking)
 	/* lwg: remaining space of a slot */
 	int slot_space = VCHIQ_SLOT_SIZE - (tx_pos & VCHIQ_SLOT_MASK);
 
-	printk("lwg:%s:%d:local tx_pos = %d, space = %ld, slot_space = %d\n", __func__, __LINE__, tx_pos, space, slot_space);
+	/*printk("lwg:%s:%d:local tx_pos = %d, space = %ld, slot_space = %d\n", __func__, __LINE__, tx_pos, space, slot_space);*/
 
 	/* lwg: if the msg has to span two slots, fill up existing slot with MSG_PADDING
 	 * allocate new slot  */
@@ -626,12 +626,12 @@ reserve_space(VCHIQ_STATE_T *state, size_t space, int is_blocking)
 		/* lwg: this now points to the beginning of a 4K slot */
 		state->tx_data =
 			(char *)SLOT_DATA_FROM_INDEX(state, slot_index);
-		printk("lwg:%s:%d:grab new slot @ %d\n", __func__, __LINE__, slot_index);
+		/*printk("lwg:%s:%d:grab new slot @ %d\n", __func__, __LINE__, slot_index);*/
 	}
 
 	/* lwg: update to point to next msg */
 	state->local_tx_pos = tx_pos + space;
-	printk("lwg:%s:%d:new tx_pos = %d\n", __func__, __LINE__, state->local_tx_pos);
+	/*printk("lwg:%s:%d:new tx_pos = %d\n", __func__, __LINE__, state->local_tx_pos);*/
 
 	/* lwg: about tx_pos -- see SLOT_QUEUE_INDEX_FROM_POS */
 
@@ -824,6 +824,7 @@ copy_message_data(
 	return size;
 }
 
+extern void* slot_virt;
 /* Called by the slot handler and application threads */
 static VCHIQ_STATUS_T
 queue_message(VCHIQ_STATE_T *state, VCHIQ_SERVICE_T *service,
@@ -955,10 +956,10 @@ queue_message(VCHIQ_STATE_T *state, VCHIQ_SERVICE_T *service,
 		int slot_use_count;
 
 		vchiq_log_info(vchiq_core_log_level,
-			"%d: qm %s@%pK,%zx (%d->%d)",
+			"%d: qm %s@%pK,%zx (%d->%d), off = %08x",
 			state->id, msg_type_str(VCHIQ_MSG_TYPE(msgid)),
 			header, size, VCHIQ_MSG_SRCPORT(msgid),
-			VCHIQ_MSG_DSTPORT(msgid));
+			VCHIQ_MSG_DSTPORT(msgid), (void *)header - slot_virt);
 
 		WARN_ON((flags & (QMFLAGS_NO_MUTEX_LOCK |
 				  QMFLAGS_NO_MUTEX_UNLOCK)) != 0);
@@ -1017,10 +1018,10 @@ queue_message(VCHIQ_STATE_T *state, VCHIQ_SERVICE_T *service,
 		VCHIQ_SERVICE_STATS_ADD(service, ctrl_tx_bytes, size);
 	} else {
 		vchiq_log_info(vchiq_core_log_level,
-			"%d: qm %s@%pK,%zx (%d->%d)", state->id,
+			"%d: qm %s@%pK,%zx (%d->%d), off = %08x", state->id,
 			msg_type_str(VCHIQ_MSG_TYPE(msgid)),
 			header, size, VCHIQ_MSG_SRCPORT(msgid),
-			VCHIQ_MSG_DSTPORT(msgid));
+			VCHIQ_MSG_DSTPORT(msgid), (void *)header - slot_virt);
 		if (size != 0) {
 			/* It is assumed for now that this code path
 			 * only happens from calls inside this file.
@@ -1047,10 +1048,11 @@ queue_message(VCHIQ_STATE_T *state, VCHIQ_SERVICE_T *service,
 		/* *tmp = *tmp - 100;*/
 		/* lwg: non-matching sizes from buffer_to_host vs bulk_rx will cause VC to abort transmission!!! */
 
-		print_hex_dump(KERN_DEBUG, "<<rx_h:", DUMP_PREFIX_OFFSET,
+		print_hex_dump(KERN_DEBUG, "<<rx_h:", DUMP_PREFIX_ADDRESS,
 				16, 4, header, sizeof(VCHIQ_HEADER_T), 1);
-		print_hex_dump(KERN_DEBUG, "<<rx_p:", DUMP_PREFIX_OFFSET,
+		print_hex_dump(KERN_DEBUG, "<<rx_p:", DUMP_PREFIX_ADDRESS,
 				16, 4, header->data, size, 1);
+		trace_printk("header offset = %08x (%p - %p)\n", (void *)header - slot_virt, header, slot_virt);
 	}
 
 	{
@@ -1760,7 +1762,7 @@ parse_rx_slots(VCHIQ_STATE_T *state)
 
 		header = (VCHIQ_HEADER_T *)(state->rx_data +
 			(state->rx_pos & VCHIQ_SLOT_MASK));
-		printk("header = %08x %08x\n", header->msgid, header->size);
+		trace_printk("header = %08x %08x\n", header->msgid, header->size);
 		DEBUG_VALUE(PARSE_HEADER, (int)(long)header);
 		msgid = header->msgid;
 		DEBUG_VALUE(PARSE_MSGID, msgid);
@@ -1890,8 +1892,8 @@ parse_rx_slots(VCHIQ_STATE_T *state)
 			break;
 		case VCHIQ_MSG_DATA:
 			vchiq_log_info(vchiq_core_log_level,
-				"%d: prs DATA@%pK,%x (%d->%d)",
-				state->id, header, size, remoteport, localport);
+				"%d: prs DATA@%pK,%x (%d->%d), off = %08x",
+				state->id, header, size, remoteport, localport, (void *)header - slot_virt);
 
 			if ((service->remoteport == remoteport)
 				&& (service->srvstate ==
@@ -1949,10 +1951,10 @@ parse_rx_slots(VCHIQ_STATE_T *state)
 				wmb();
 
 				vchiq_log_info(vchiq_core_log_level,
-					"%d: prs %s@%pK (%d->%d) %x@%pK",
+					"%d: prs %s@%pK (%d->%d) %x@%pK, off = %08x",
 					state->id, msg_type_str(type),
 					header, remoteport, localport,
-					bulk->remote_size, bulk->remote_data);
+					bulk->remote_size, bulk->remote_data, (void *)header - slot_virt);
 
 				queue->remote_insert++;
 
@@ -2029,10 +2031,10 @@ parse_rx_slots(VCHIQ_STATE_T *state)
 				queue->remote_insert++;
 
 				vchiq_log_info(vchiq_core_log_level,
-					"%d: prs %s@%pK (%d->%d) %x@%pK",
+					"%d: prs %s@%pK (%d->%d) %x@%pK, off = %08x",
 					state->id, msg_type_str(type),
 					header, remoteport, localport,
-					bulk->actual, bulk->data);
+					bulk->actual, bulk->data, (void *)header - slot_virt);
 
 				vchiq_log_trace(vchiq_core_log_level,
 					"%d: prs:%d %cx li=%x ri=%x p=%x",

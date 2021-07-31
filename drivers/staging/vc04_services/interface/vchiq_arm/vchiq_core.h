@@ -49,7 +49,9 @@
 #define VCHIQ_LOG_INFO     6
 #define VCHIQ_LOG_TRACE    7
 
-#define VCHIQ_LOG_PREFIX   KERN_INFO "vchiq: "
+//#define VCHIQ_LOG_PREFIX   KERN_INFO "vchiq: "
+// lwg: for a cleaner trace_printk
+#define VCHIQ_LOG_PREFIX   "vchiq: "
 
 #ifndef vchiq_log_error
 #define vchiq_log_error(cat, fmt, ...) \
@@ -61,11 +63,13 @@
 	do { if (cat >= VCHIQ_LOG_WARNING) \
 		 printk(VCHIQ_LOG_PREFIX fmt "\n", ##__VA_ARGS__); } while (0)
 #endif
+/* lwg: trace...  */
 #ifndef vchiq_log_info
 #define vchiq_log_info(cat, fmt, ...) \
 	do { if (cat >= VCHIQ_LOG_INFO) \
 		printk(VCHIQ_LOG_PREFIX fmt "\n", ##__VA_ARGS__); } while (0)
 #endif
+/* lwg: trace...  */
 #ifndef vchiq_log_trace
 #define vchiq_log_trace(cat, fmt, ...) \
 	do { if (cat >= VCHIQ_LOG_TRACE) \

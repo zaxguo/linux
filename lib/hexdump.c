@@ -13,6 +13,8 @@
 #include <linux/kernel.h>
 #include <linux/export.h>
 #include <asm/unaligned.h>
+/* for trace prinkt */
+#include <asm/string.h>
 
 const char hex_asc[] = "0123456789abcdef";
 EXPORT_SYMBOL(hex_asc);
@@ -247,6 +249,8 @@ void print_hex_dump(const char *level, const char *prefix_str, int prefix_type,
 	const u8 *ptr = buf;
 	int i, linelen, remaining = len;
 	unsigned char linebuf[32 * 3 + 2 + 32 + 1];
+	/* lwg: dirty .. */
+	printk_once("lwg: ---- Attention ---- hex dump has all been directed to trace_printk!\n");
 
 	if (rowsize != 16 && rowsize != 32)
 		rowsize = 16;
@@ -261,13 +265,17 @@ void print_hex_dump(const char *level, const char *prefix_str, int prefix_type,
 		switch (prefix_type) {
 		case DUMP_PREFIX_ADDRESS:
 			printk("%s%s%p: %s\n",
-			       level, prefix_str, ptr + i, linebuf);
+				   level, prefix_str, ptr + i, linebuf);
+			/*trace_printk("%s%s%p: %s\n",*/
+				   /*level, prefix_str, ptr + i, linebuf);*/
 			break;
 		case DUMP_PREFIX_OFFSET:
-			printk("%s%s%.8x: %s\n", level, prefix_str, i, linebuf);
+			/*printk("%s%s%.8x: %s\n", level, prefix_str, i, linebuf);*/
+			trace_printk("%s%s%.8x: %s\n", level, prefix_str, i, linebuf);
 			break;
 		default:
 			printk("%s%s%s\n", level, prefix_str, linebuf);
+			trace_printk("%s%s%s\n", level, prefix_str, linebuf);
 			break;
 		}
 	}
