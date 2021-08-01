@@ -446,8 +446,8 @@ static int bulk_receive(struct vchiq_mmal_instance *instance,
 				       */
 					  /* lwg: damn the alignment */
 				      (rd_len + 3) & ~3,
-				      VCHI_FLAGS_CALLBACK_WHEN_OP_COMPLETE |
-				      VCHI_FLAGS_BLOCK_UNTIL_QUEUED,
+					  VCHI_FLAGS_CALLBACK_WHEN_OP_COMPLETE |
+					  VCHI_FLAGS_BLOCK_UNTIL_QUEUED,
 				      msg_context);
 
 	vchi_service_release(instance->handle);

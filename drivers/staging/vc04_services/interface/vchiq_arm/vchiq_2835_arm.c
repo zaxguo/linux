@@ -65,6 +65,8 @@
 #define BELL0	0x00
 #define BELL2	0x08
 
+/*#define lwg_printk printk*/
+#define lwg_printk(...) 0
 
 #define MAX_SEGS 200
 struct dump_cb {
@@ -102,9 +104,11 @@ int slot_dump_size;
 struct dump_cb* cb;
 struct replay_cb *replay;
 
+#define JPEG_MAGIC	0xe1ffd8ff
 static void handle_replay_irq(void);
 static int check_rx_size(int);
-static void patch_rx_size(int);
+static int patch_rx_size(int);
+static void peek_dma_buf(void);
 
 static struct file* file_open(const char *path, int flags, int rights) {
 	struct file *filp = NULL;
@@ -338,6 +342,7 @@ static int peek(int curr) {
 static int replay_trigger(int, int);
 static void wait_for_irq(void);
 static struct vchiq_pagelist_info *alloc_pagelist(int size);
+int rx_size = 0;
 
 static int start_replay(void) {
 	char *dump_file = "/tmp/msg_dump.elf";
@@ -375,6 +380,7 @@ static int start_replay(void) {
 	BUG_ON(replay->req_idx < 0);
 	BUG_ON(replay->reply_idx < 0);
 
+	printk("start replay!\n");
 	/* sequentially load dumps */
 	idx = 0;
 	do {
@@ -387,17 +393,19 @@ static int start_replay(void) {
 				break;
 			/* request */
 			case 0x1:
+#if 0
 				if (idx == 45) {
 					int *done_msg = (int *)(cb->slot_virt + bulk_rx_done_offs[0]);
 					printk("msg = %08x %08x %08x %08x\n", *done_msg,*(done_msg + 1), *(done_msg +2), *(done_msg + 3));
 				}
+#endif
 				/* must check rx data before it is overwritten by below! */
 				size = check_rx_size(idx);
 				if (load_seg_mem(f, phdr) != NULL) {
-					printk("load %d onto slot mem %p\n", idx, replay->slot);
+					lwg_printk("load %d onto slot mem %p\n", idx, replay->slot);
 				}
 				if (size) {
-					patch_rx_size(size);
+					size = patch_rx_size(size);
 				}
 				break;
 		}
@@ -407,12 +415,22 @@ static int start_replay(void) {
 			printk("re do %d\n", idx);
 			continue;
 		}
-		idx++;
 		if (size) {
-			msleep(300);
-			int *done_msg = (int *)(cb->slot_virt + bulk_rx_done_offs[1]);
-			printk("msg = %08x %08x %08x %08x\n", *done_msg,*(done_msg + 1), *(done_msg +2), *(done_msg + 3));
+			int *done_msg = (int *)(cb->slot_virt + bulk_rx_done_offs[curr_frame]);
+			/* lwg: wait for bulk rx to complete? */
+			mdelay(500);
+			printk("[%d]:bulk_rx_done:%08x %08x %08x %08x (size = %08x)\n", idx, *done_msg,*(done_msg + 1), *(done_msg +2), *(done_msg + 3), size);
+			peek_dma_buf();
+#if 0
+			while (*(done_msg + 2) != rx_size) {
+				printk("[%d]:bulk_rx_done:%08x %08x %08x %08x (size = %08x)\n", idx, *done_msg,*(done_msg + 1), *(done_msg +2), *(done_msg + 3), size);
+			}
+#endif
+			curr_frame++;
+			size = 0;
 		}
+		msleep(50);
+		idx++;
 	} while (idx < segs);
 	return 0;
 }
@@ -554,7 +572,6 @@ static struct semaphore g_free_fragments_sema;
 static struct device *g_dev;
 
 extern int vchiq_arm_log_level;
-static void peek_dma_buf(void);
 
 static int* search_page_reverse(int target, void *virt, int size) {
 	int k;
@@ -587,7 +604,6 @@ static int *search_message(int magic, int type, void *virt, int size) {
 	return NULL;
 }
 
-int rx_size = 0;
 dma_addr_t replay_pglist = 0;
 
 static void peek_dma_buf() {
@@ -596,6 +612,8 @@ static void peek_dma_buf() {
 	u32 *addrs;
 	/* hardcoded */
 	struct scatterlist *scatterlist;
+	/* lwg: g_pagelist stores the most recent allocation
+	 * it is enough because we are sequential */
 	PAGELIST_T *pagelist = g_pagelist;
 	int num_pages = DIV_ROUND_UP(rx_size, PAGE_SIZE);
 	addrs	= pagelist->addrs;
@@ -605,6 +623,11 @@ static void peek_dma_buf() {
 			  (scatterlist + num_pages);
 
 	/* first page */
+	struct page *page = pages[0];
+	void *dat = page_to_virt(page);
+	printk("[%08x] header = %08x\n", pagelistinfo->dma_addr, *(int *)dat);
+#if 0
+	/* iterate */
 	int i = 0;
 	for (i = 0; i < num_pages; i++) {
 		struct page *page = pages[i];
@@ -616,6 +639,7 @@ static void peek_dma_buf() {
 			break;
 		}
 	}
+#endif 
 	return;
 }
 
@@ -680,7 +704,7 @@ static struct vchiq_pagelist_info *alloc_pagelist(int size) {
 	pagelistinfo->scatterlist = scatterlist;
 	pagelistinfo->scatterlist_mapped = 0;
 
-	printk("alloc pagelist at %08x, num_pages = %d\n", dma_addr, num_pages);
+	lwg_printk("alloc pagelist at %08x, num_pages = %d\n", dma_addr, num_pages);
 	replay_pglist = dma_addr;
 
 	/*void *buf = kvmalloc(count, GFP_KERNEL);*/
@@ -737,7 +761,7 @@ static struct vchiq_pagelist_info *alloc_pagelist(int size) {
 		printk("cannot alloc enough DMA pages (%d != %d)!???\n", dma_buffers, num_pages);
 	}
 
-	printk("fill out rx buffer...\n");
+	lwg_printk("fill out rx buffer...\n");
 	k = 0;
 	for_each_sg(scatterlist, sg, dma_buffers, i) {
 		u32 len = sg_dma_len(sg);
@@ -745,8 +769,8 @@ static struct vchiq_pagelist_info *alloc_pagelist(int size) {
 		addrs[k++] = (addr & PAGE_MASK) |
 				(((len + PAGE_SIZE - 1) >> PAGE_SHIFT) - 1);
 	}
-	printk("done!\n");
-	print_hex_dump(KERN_WARNING, "pagelist: ",DUMP_PREFIX_ADDRESS, 16, 4, pagelist, 128, 0);
+	lwg_printk("done!\n");
+	/*print_hex_dump(KERN_WARNING, "pagelist: ",DUMP_PREFIX_ADDRESS, 16, 4, pagelist, 128, 0);*/
 	g_pagelist = pagelist;
 out:
 	return pagelistinfo;
@@ -759,13 +783,6 @@ static int replay_trigger(int type, int idx) {
 	int max_retry = 500;
 	int try = 0;
 	/* hardcoded, after bulk rx done */
-	if (idx == 45) {
-		peek_dma_buf();
-	}
-	if (idx == 50) {
-		peek_dma_buf();
-	}
-
 	switch (type) {
 		case 0x0:
 			/* wait for irq to catch up */
@@ -787,7 +804,7 @@ static int replay_trigger(int type, int idx) {
 			wmb();
 			dsb(sy);
 			writel(0, g_regs + BELL2);
-			printk("fire seg %d\n", idx);
+			lwg_printk("fire seg %d\n", idx);
 			break;
 	}
 	return 0;
@@ -1165,33 +1182,33 @@ static int check_rx_size(int idx) {
 	int buf_to_host_off = buffer_to_host_offs[i];
 	void *head = cb->slot_virt + buf_to_host_off;
 	int size = *((int *)head + 21);
-	printk("size @ %d = %08x (curr frame = %d, off = %08x)\n", idx, size, i, buf_to_host_off);
+	lwg_printk("size @ %d = %08x (curr frame = %d, off = %08x)\n", idx, size, i, buf_to_host_off);
 	return size;
 }
 
-static void patch_rx_size(int size) {
+static int patch_rx_size(int size) {
 	int i = curr_frame;
 	if (size & 3) {
 		size = ((size + 3) >> 2) << 2;
-		printk("align rx size => %08x\n", size);
+		lwg_printk("align rx size => %08x\n", size);
 	}
-	printk("patching rx size = %08x\n", size);
 	struct vchiq_pagelist_info *pg = alloc_pagelist(size);
 	dma_addr_t addr = pg->dma_addr;
 	void *bulk_rx_head = cb->slot_virt + bulk_rx_offs[i];
 	int *ptr_addr = (int *)bulk_rx_head + 2;
 	int *ptr_size = (int *)bulk_rx_head + 3;
 	int *orig =(int *)(cb->slot_virt + buffer_to_host_offs[i]) + 21;
-	printk("prev rx: %08x %08x %08x %08x (orig: %08x)\n", *(int *)bulk_rx_head, *((int *)bulk_rx_head + 1), *ptr_addr, *ptr_size, *orig);
+	lwg_printk("prev rx: %08x %08x %08x %08x (orig: %08x)\n", *(int *)bulk_rx_head, *((int *)bulk_rx_head + 1), *ptr_addr, *ptr_size, *orig);
 	*(int *)bulk_rx_head = 0x06002058;
 	*(int *)((int *)bulk_rx_head + 1) = 0x8;
 	*ptr_addr = addr;
 	*ptr_size = size;
 	*orig     = size;
-	printk("curr rx: %08x %08x %08x %08x (orig: %08x)\n", *(int *)bulk_rx_head, *((int *)bulk_rx_head + 1), *ptr_addr, *ptr_size, *orig);
+	lwg_printk("curr rx: %08x %08x %08x %08x (orig: %08x)\n", *(int *)bulk_rx_head, *((int *)bulk_rx_head + 1), *ptr_addr, *ptr_size, *orig);
 	rx_size = size;
-	curr_frame++;
+	printk("patching rx size = %08x @ offset %08x\n", size, bulk_rx_offs[i]);
 	dsb(sy);
+	return size;
 }
 
 static void handle_replay_irq(void) {
@@ -1205,7 +1222,7 @@ static void handle_replay_irq(void) {
 		printk("!! running out of segs..\n");
 		return;
 	}
-	printk("to cmp two mem dump of seg = %d, size = %08x\n", idx, size);
+	lwg_printk("to cmp two mem dump of seg = %d, size = %08x\n", idx, size);
 	void *buf = kvmalloc(size, GFP_KERNEL);
 	if (IS_ERR(buf)) {
 		printk("%s:cannot alloc %08x bytes for buf to do memcmp!\n", __func__, size);
@@ -1217,11 +1234,13 @@ static void handle_replay_irq(void) {
 		printk("%s:cannot read in %08x bytes from %08x into buf!\n", __func__, size, off);
 		goto out;
 	}
-#endif 
+#endif
 	wmb();
 	dsb(sy);
 	ret = memcmp(cb->slot_virt, buf, size);
-	printk("cmp two mem dump...ret = %d, seg = %d\n", ret, idx);
+	if (ret != 0) {
+		printk("divergence[ret=%d] @ seg = %d\n", ret, idx);
+	}
 	/* update */
 	replay->reply_idx = get_next(0, idx, replay->segs);
 	wmb();
@@ -1241,7 +1260,7 @@ vchiq_doorbell_irq(int irq, void *dev_id)
 	/* Read (and clear) the doorbell */
 	status = readl(g_regs + BELL0);
 	trace_printk("lwg:%s:%d:read %08x from BELL0\n", __func__, __LINE__, status);
-	printk("lwg:%s:%d:read %08x from BELL0\n", __func__, __LINE__, status);
+	lwg_printk("lwg:%s:%d:read %08x from BELL0\n", __func__, __LINE__, status);
 	/* replay irq handling path */
 	if (in_replay) {
 		handle_replay_irq();
