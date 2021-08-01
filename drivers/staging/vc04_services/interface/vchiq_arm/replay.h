@@ -6,7 +6,7 @@
  * get rx size via (int*)off + 21 */
 #define FRAMES 2
 
-int buffer_to_host_offs[FRAMES] = {0x5500, 0x5690};
+int buffer_to_host_offs[FRAMES] = {0x5500, 0x5668};
 int bulk_rx_offs[FRAMES] = {0x24198, 0x24348};
 int bulk_rx_done_offs[FRAMES] = {0x5630, 0x57c0};
 int curr_frame = 0;

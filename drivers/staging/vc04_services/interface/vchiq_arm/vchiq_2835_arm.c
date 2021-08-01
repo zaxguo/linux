@@ -408,7 +408,11 @@ static int start_replay(void) {
 			continue;
 		}
 		idx++;
-		msleep(100);
+		if (size) {
+			msleep(300);
+			int *done_msg = (int *)(cb->slot_virt + bulk_rx_done_offs[1]);
+			printk("msg = %08x %08x %08x %08x\n", *done_msg,*(done_msg + 1), *(done_msg +2), *(done_msg + 3));
+		}
 	} while (idx < segs);
 	return 0;
 }
@@ -755,9 +759,13 @@ static int replay_trigger(int type, int idx) {
 	int max_retry = 500;
 	int try = 0;
 	/* hardcoded, after bulk rx done */
-	if (idx == 46) {
+	if (idx == 45) {
 		peek_dma_buf();
 	}
+	if (idx == 50) {
+		peek_dma_buf();
+	}
+
 	switch (type) {
 		case 0x0:
 			/* wait for irq to catch up */
@@ -778,12 +786,6 @@ static int replay_trigger(int type, int idx) {
 			replay->req_idx = idx;
 			wmb();
 			dsb(sy);
-			if (idx == 44) {
-				int *done_msg = (int *)(cb->slot_virt + bulk_rx_done_offs[0]);
-				printk("msg = %08x\n", *done_msg);
-				/* let kernel fault ?? */
-				/*in_replay = 0;*/
-			}
 			writel(0, g_regs + BELL2);
 			printk("fire seg %d\n", idx);
 			break;
@@ -1014,6 +1016,7 @@ remote_event_signal(REMOTE_EVENT_T *event)
 	if (event->armed) {
 		writel(0, g_regs + BELL2); /* trigger vc interrupt */
 		trace_printk("lwg:%s:%d:write 0 to BELL2\n", __func__, __LINE__);
+		printk("lwg:%s:%d:write 0 to BELL2\n", __func__, __LINE__);
 	}
 }
 
@@ -1162,7 +1165,7 @@ static int check_rx_size(int idx) {
 	int buf_to_host_off = buffer_to_host_offs[i];
 	void *head = cb->slot_virt + buf_to_host_off;
 	int size = *((int *)head + 21);
-	printk("size @ %d = %08x\n", idx, size);
+	printk("size @ %d = %08x (curr frame = %d, off = %08x)\n", idx, size, i, buf_to_host_off);
 	return size;
 }
 
@@ -1180,6 +1183,8 @@ static void patch_rx_size(int size) {
 	int *ptr_size = (int *)bulk_rx_head + 3;
 	int *orig =(int *)(cb->slot_virt + buffer_to_host_offs[i]) + 21;
 	printk("prev rx: %08x %08x %08x %08x (orig: %08x)\n", *(int *)bulk_rx_head, *((int *)bulk_rx_head + 1), *ptr_addr, *ptr_size, *orig);
+	*(int *)bulk_rx_head = 0x06002058;
+	*(int *)((int *)bulk_rx_head + 1) = 0x8;
 	*ptr_addr = addr;
 	*ptr_size = size;
 	*orig     = size;
@@ -1476,7 +1481,7 @@ create_pagelist(char __user *buf, size_t count, unsigned short type,
 	vchiq_log_trace(vchiq_arm_log_level, "create_pagelist - %pK, phys = %08x, size = %08x, off = %08x, num_pages = %d, count = %08x, type = %d, addr = %08x", pagelist, dma_addr, pagelist_size, offset, num_pages, pagelist->length, pagelist->type, pagelist->addrs[0]);
 	/* dump first 128 bytes of pagelist
 	 * this will affect timing of replay */
-	print_hex_dump(KERN_WARNING, "pagelist: ",DUMP_PREFIX_ADDRESS, 16, 4, pagelist, 128, 0);
+	/*print_hex_dump(KERN_WARNING, "pagelist: ",DUMP_PREFIX_ADDRESS, 16, 4, pagelist, 128, 0);*/
 	return pagelistinfo;
 }
 

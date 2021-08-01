@@ -1048,9 +1048,11 @@ queue_message(VCHIQ_STATE_T *state, VCHIQ_SERVICE_T *service,
 		/* *tmp = *tmp - 100;*/
 		/* lwg: non-matching sizes from buffer_to_host vs bulk_rx will cause VC to abort transmission!!! */
 
-		print_hex_dump(KERN_DEBUG, "<<rx_h:", DUMP_PREFIX_ADDRESS,
+		/*print_hex_dump(KERN_DEBUG, "<<rx_h:", DUMP_PREFIX_ADDRESS,*/
+		print_hex_dump(KERN_DEBUG, "<<rx_h:", DUMP_PREFIX_OFFSET,
 				16, 4, header, sizeof(VCHIQ_HEADER_T), 1);
-		print_hex_dump(KERN_DEBUG, "<<rx_p:", DUMP_PREFIX_ADDRESS,
+		/*print_hex_dump(KERN_DEBUG, "<<rx_p:", DUMP_PREFIX_ADDRESS,*/
+		print_hex_dump(KERN_DEBUG, "<<rx_p:", DUMP_PREFIX_OFFSET,
 				16, 4, header->data, size, 1);
 		trace_printk("header offset = %08x (%p - %p)\n", (void *)header - slot_virt, header, slot_virt);
 	}

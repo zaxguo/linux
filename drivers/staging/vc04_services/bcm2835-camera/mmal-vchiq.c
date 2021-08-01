@@ -136,10 +136,10 @@ static const char *const port_action_type_names[] = {
 		printk(TITLE" type:%s(%d) length:%d\n",		\
 			 msg_type_names[(MSG)->h.type],			\
 			 (MSG)->h.type, (MSG_LEN));			\
-		print_hex_dump(KERN_DEBUG, "<<h: ", DUMP_PREFIX_ADDRESS,	\
+		print_hex_dump(KERN_DEBUG, "<<h: ", DUMP_PREFIX_OFFSET,	\
 			       16, 4, (MSG),				\
 			       sizeof(struct mmal_msg_header), 1);	\
-		print_hex_dump(KERN_DEBUG, "<<p: ", DUMP_PREFIX_ADDRESS,	\
+		print_hex_dump(KERN_DEBUG, "<<p: ", DUMP_PREFIX_OFFSET,	\
 			       16, 4,					\
 			       ((u8 *)(MSG)) + sizeof(struct mmal_msg_header),\
 			       (MSG_LEN) - sizeof(struct mmal_msg_header), 1); \
@@ -444,6 +444,7 @@ static int bulk_receive(struct vchiq_mmal_instance *instance,
 				      /* Actual receive needs to be a multiple
 				       * of 4 bytes
 				       */
+					  /* lwg: damn the alignment */
 				      (rd_len + 3) & ~3,
 				      VCHI_FLAGS_CALLBACK_WHEN_OP_COMPLETE |
 				      VCHI_FLAGS_BLOCK_UNTIL_QUEUED,
