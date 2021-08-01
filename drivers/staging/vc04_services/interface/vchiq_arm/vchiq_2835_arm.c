@@ -429,7 +429,7 @@ static int start_replay(void) {
 			curr_frame++;
 			size = 0;
 		}
-		msleep(50);
+		msleep(10);
 		idx++;
 	} while (idx < segs);
 	return 0;
