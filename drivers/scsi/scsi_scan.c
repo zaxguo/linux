@@ -133,6 +133,7 @@ struct async_scan_data {
 int scsi_complete_async_scans(void)
 {
 	struct async_scan_data *data;
+	printk("lwg:%s:%d:lollll\n", __func__, __LINE__);
 
 	do {
 		if (list_empty(&scanning_hosts))

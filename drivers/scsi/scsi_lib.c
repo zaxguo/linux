@@ -2590,6 +2590,11 @@ scsi_test_unit_ready(struct scsi_device *sdev, int timeout, int retries,
 		TEST_UNIT_READY, 0, 0, 0, 0, 0,
 	};
 	int result;
+#if 0
+	/* lwg: this is sent from disk_check_events */
+	printk("lwg:%s:%d:lollll\n", __func__, __LINE__);
+	dump_stack();
+#endif 
 
 	/* try to eat the UNIT_ATTENTION if there are enough retries */
 	do {

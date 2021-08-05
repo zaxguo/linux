@@ -910,6 +910,7 @@ static void usb_stor_scan_dwork(struct work_struct *work)
 	struct device *dev = &us->pusb_intf->dev;
 
 	dev_dbg(dev, "starting scan\n");
+	trace_printk("starting scan\n");
 
 	/* For bulk-only devices, determine the max LUN value */
 	if (us->protocol == USB_PR_BULK &&
@@ -928,6 +929,7 @@ static void usb_stor_scan_dwork(struct work_struct *work)
 	}
 	scsi_scan_host(us_to_host(us));
 	dev_dbg(dev, "scan complete\n");
+	trace_printk("scan complete\n");
 
 	/* Should we unbind if no devices were detected? */
 

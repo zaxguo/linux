@@ -1188,6 +1188,7 @@ int usb_stor_Bulk_transport(struct scsi_cmnd *srb, struct us_data *us)
 		     le32_to_cpu(bcb->DataTransferLength), bcb->Flags,
 		     (bcb->Lun >> 4), (bcb->Lun & 0x0F),
 		     bcb->Length);
+	print_hex_dump(KERN_WARNING, "bcb:", DUMP_PREFIX_ADDRESS, 16, 4, bcb->CDB, bcb->Length, 0);
 
 
 

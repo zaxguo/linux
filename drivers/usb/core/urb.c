@@ -76,6 +76,7 @@ struct urb *usb_alloc_urb(int iso_packets, gfp_t mem_flags)
 	if (!urb)
 		return NULL;
 	usb_init_urb(urb);
+	/*trace_printk("entered..\n");*/
 	return urb;
 }
 EXPORT_SYMBOL_GPL(usb_alloc_urb);

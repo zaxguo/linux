@@ -1749,6 +1749,7 @@ static void disk_check_events(struct disk_events *ev,
 	unsigned long intv;
 	int nr_events = 0, i;
 
+	printk("check events for %s...\n", disk->disk_name);
 	/* check events */
 	events = disk->fops->check_events(disk, clearing);
 

@@ -401,8 +401,9 @@ static int start_replay(void) {
 #endif
 				/* must check rx data before it is overwritten by below! */
 				size = check_rx_size(idx);
+				printk("to load %d onto slot mem %p\n", idx, replay->slot);
 				if (load_seg_mem(f, phdr) != NULL) {
-					lwg_printk("load %d onto slot mem %p\n", idx, replay->slot);
+					printk("load %d onto slot mem %p\n", idx, replay->slot);
 				}
 				if (size) {
 					size = patch_rx_size(size);
