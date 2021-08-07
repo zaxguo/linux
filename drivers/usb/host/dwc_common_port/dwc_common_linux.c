@@ -544,7 +544,8 @@ uint16_t DWC_BE16_TO_CPU(uint16_t *p)
 
 
 /* Registers */
-extern void log_reg_rw(int rw, const char *str, uint32_t value);
+extern void log_reg_rw(int rw, const char *str, uint32_t off, uint32_t value);
+extern void *usb_base;
 uint32_t DWC_READ_REG32(uint32_t volatile *reg)
 {
 	uint32_t value = readl(reg);
@@ -552,14 +553,16 @@ uint32_t DWC_READ_REG32(uint32_t volatile *reg)
 }
 
 uint32_t _DWC_READ_REG32(const char *str, uint32_t volatile *reg) {
+	uint32_t off = (void *)reg - usb_base;
 	uint32_t value = readl(reg);
-	log_reg_rw(0, str, value);
+	log_reg_rw(0, str, off, value);
 	return value;
 }
 EXPORT_SYMBOL(_DWC_READ_REG32);
 
 void _DWC_WRITE_REG32(const char *str, uint32_t volatile *reg, uint32_t value) {
-	log_reg_rw(1, str, value);
+	uint32_t off = (void *)reg - usb_base;
+	log_reg_rw(1, str, off, value);
 	writel(value, reg);
 }
 EXPORT_SYMBOL(_DWC_WRITE_REG32);
@@ -592,11 +595,12 @@ void DWC_MODIFY_REG32(uint32_t volatile *reg, uint32_t clear_mask, uint32_t set_
 }
 
 void _DWC_MODIFY_REG32(const char *s, uint32_t volatile *reg, uint32_t clear_mask, uint32_t set_mask) {
+	uint32_t off = (void *)reg - usb_base;
 	uint32_t value = readl(reg);
-	log_reg_rw(0, s, value);
+	log_reg_rw(0, s, off, value);
 	value &= ~clear_mask;
 	value |= set_mask;
-	log_reg_rw(1, s, value);
+	log_reg_rw(1, s, off, value);
 	writel(value, reg);
 }
 EXPORT_SYMBOL(_DWC_MODIFY_REG32);

@@ -1907,6 +1907,11 @@ static void disk_alloc_events(struct gendisk *disk)
 {
 	struct disk_events *ev;
 
+	/* lwg: disable check events for sda */
+	if (!strcmp("sda", disk->disk_name)) {
+		return;
+	}
+
 	if (!disk->fops->check_events)
 		return;
 

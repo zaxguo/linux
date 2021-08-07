@@ -68,7 +68,7 @@ extern bool cil_force_host;
 
 
 /* lwg: used to determine base addr */
-dwc_otg_core_if_t *usb_core;
+void *usb_base;
 void *banks[6];
 int sizes[6];
 const char *names[] = {
@@ -81,9 +81,8 @@ const char *names[] = {
 };
 static int bank_count;
 
-
 static void init_regmap(void) {
-	dwc_otg_core_if_t *base = usb_core;
+	dwc_otg_core_if_t *base = usb_base;
 	bank_count = 0;
 	/* 6 banks */
 	dwc_otg_core_global_regs_t *core_global =  base->core_global_regs;
@@ -116,9 +115,9 @@ static void init_regmap(void) {
 	bank_count++;
 }
 
-void log_reg_rw(int rw, const char *str, uint32_t value) {
+void log_reg_rw(int rw, const char *str, uint32_t off, uint32_t value) {
 	/* do not log, directly return */
-	return;
+	/*return;*/
 #if 0
 	/* look for the code which turns on sof */
 	int i, j;
@@ -135,7 +134,7 @@ void log_reg_rw(int rw, const char *str, uint32_t value) {
 		}
 	}
 #endif
-	trace_printk("%d,%s,%08x\n", rw, str, value);
+	trace_printk("%d,%s,%x,%08x\n", rw, str, off, value);
 }
 EXPORT_SYMBOL(log_reg_rw);
 
@@ -172,7 +171,9 @@ dwc_otg_core_if_t *dwc_otg_cil_init(const uint32_t * reg_base_addr)
 		return 0;
 	}
 	core_if->core_global_regs = (dwc_otg_core_global_regs_t *) reg_base;
-
+	/* lwg: before any read/write and its members are supposed to be initialized! */
+	usb_base = (void *)reg_base;
+	printk("setting usb base to %p\n", usb_base);
 	/*
 	 * Allocate the Device Mode structures.
 	 */
@@ -249,8 +250,6 @@ dwc_otg_core_if_t *dwc_otg_cil_init(const uint32_t * reg_base_addr)
 	/* Initiate lx_state to L3 disconnected state */
 	core_if->lx_state = DWC_OTG_L3;
 
-	/* lwg: before any read/write and its members are supposed to be initialized! */
-	usb_core = core_if;
 	/*init_regmap();*/
 
 
@@ -359,6 +358,7 @@ dwc_otg_core_if_t *dwc_otg_cil_init(const uint32_t * reg_base_addr)
 
 	/** ADP initialization */
 	dwc_otg_adp_init(core_if);
+
 
 	return core_if;
 }
@@ -1302,6 +1302,7 @@ static uint32_t calc_num_out_eps(dwc_otg_core_if_t * core_if)
 void dwc_otg_core_init(dwc_otg_core_if_t * core_if)
 {
 	int i = 0;
+	trace_printk("init start..\n");
 	dwc_otg_core_global_regs_t *global_regs = core_if->core_global_regs;
 	dwc_otg_dev_if_t *dev_if = core_if->dev_if;
 	gahbcfg_data_t ahbcfg = {.d32 = 0 };
@@ -1621,6 +1622,7 @@ void dwc_otg_core_init(dwc_otg_core_if_t * core_if)
 		dwc_otg_core_dev_init(core_if);
 #endif
 	}
+	trace_printk("init end..\n");
 }
 
 /**
@@ -2935,7 +2937,7 @@ void dwc_otg_hc_start_transfer(dwc_otg_core_if_t * core_if, dwc_hc_t * hc)
 	DWC_DEBUGPL(DBG_HCDV, "	 Num Pkts: %d\n", hctsiz.b.pktcnt);
 	DWC_DEBUGPL(DBG_HCDV, "	 Start PID: %d\n", hctsiz.b.pid);
 
-#if 0
+#if 1
 	trace_printk("%s: Channel %d\n", __func__, hc->hc_num);
 	trace_printk("	 Xfer Size: %d\n", hctsiz.b.xfersize);
 	trace_printk("	 Num Pkts: %d\n", hctsiz.b.pktcnt);
@@ -2975,6 +2977,9 @@ void dwc_otg_hc_start_transfer(dwc_otg_core_if_t * core_if, dwc_hc_t * hc)
 	/* Set host channel enable after all other setup is complete. */
 	hcchar.b.chen = 1;
 	hcchar.b.chdis = 0;
+	/* lwg -- dump insts before  */
+	DWC_READ_REG32(&core_if->core_global_regs->gintsts);
+
 	DWC_WRITE_REG32(&hc_regs->hcchar, hcchar.d32);
 
 	hc->xfer_started = 1;
@@ -5197,7 +5202,7 @@ void dwc_otg_core_reset(dwc_otg_core_if_t * core_if)
 	dwc_otg_core_global_regs_t *global_regs = core_if->core_global_regs;
 	volatile grstctl_t greset = {.d32 = 0 };
 	int count = 0;
-
+	trace_printk("reset start..\n");
 	DWC_DEBUGPL(DBG_CILV, "%s\n", __func__);
 	/* Wait for AHB master IDLE state. */
 	do {
@@ -5228,6 +5233,7 @@ void dwc_otg_core_reset(dwc_otg_core_if_t * core_if)
 
 	/* Wait for 3 PHY Clocks */
 	dwc_mdelay(100);
+	trace_printk("reset end..\n");
 }
 
 uint8_t dwc_otg_is_device_mode(dwc_otg_core_if_t * _core_if)

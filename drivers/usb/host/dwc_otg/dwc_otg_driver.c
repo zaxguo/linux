@@ -57,6 +57,9 @@
 #include "dwc_otg_pcd_if.h"
 #include "dwc_otg_hcd_if.h"
 #include "dwc_otg_fiq_fsm.h"
+#include <linux/proc_fs.h>
+#include "replay/wr_8.h"
+
 
 #define DWC_DRIVER_VERSION	"3.00a 10-AUG-2012"
 #define DWC_DRIVER_DESC		"HS OTG USB Controller driver"
@@ -64,6 +67,33 @@
 bool microframe_schedule=true;
 
 static const char dwc_driver_name[] = "dwc_otg";
+
+extern void *usb_base;
+void *dma_ctx;
+static void replay_kernel(void *host) {
+	disable_irq(41);
+	wr_8(host);
+	enable_irq(41);
+}
+
+
+static int usb_replay_trigger(struct seq_file *s, void *unused) {
+	void *host = usb_base;
+	printk("usb base = %p\n", usb_base);
+	replay_kernel(host);
+}
+
+static int usb_replay_open(struct inode *inode, struct file *file) {
+	return single_open(file, usb_replay_trigger, PDE_DATA(inode));
+}
+
+static const struct file_operations usb_replay_ops = {
+	.open = usb_replay_open,
+	.read = seq_read,
+	.llseek = seq_lseek,
+	.release  = single_release,
+};
+
 
 
 extern int pcd_init(
@@ -993,6 +1023,10 @@ static int dwc_otg_driver_probe(
 		dwc_otg_adp_start(dwc_otg_device->core_if,
 							dwc_otg_is_host_mode(dwc_otg_device->core_if));
 
+
+	/* lwg -- */
+	dma_ctx = &_dev->dev;
+	proc_create_data("usb_replay", 0, NULL, &usb_replay_ops, usb_base);
 	return 0;
 
 fail:

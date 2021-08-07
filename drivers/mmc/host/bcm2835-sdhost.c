@@ -167,7 +167,7 @@ EXPORT_SYMBOL(in_replay);
 
 extern void* replay_dma_chan;
 
-static int record = 1;
+static int record = 0;
 
 uint32_t *dma_data, *dma_data2, *dma_data3, *dma_data4;
 
@@ -2523,7 +2523,7 @@ static const struct file_operations mmc_replay_ops = {
 
 static int bcm2835_sdhost_probe(struct platform_device *pdev)
 {
-	record = 1;
+	record = 0;
 	trace_printk("probe start\n");
 	struct device *dev = &pdev->dev;
 	struct device_node *node = dev->of_node;

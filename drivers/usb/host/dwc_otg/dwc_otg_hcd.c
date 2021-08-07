@@ -1002,6 +1002,8 @@ int dwc_otg_hcd_init(dwc_otg_hcd_t * hcd, dwc_otg_core_if_t * core_if)
 #endif
 		DWC_DEBUGPL(DBG_HCDV, "HCD Added channel #%d, hc=%p\n", i,
 			    channel);
+		printk("HCD Added channel #%d, hc=%p\n", i,
+			    channel);
 	}
 
 	if (fiq_enable) {
@@ -1198,6 +1200,7 @@ static void assign_and_init_hc(dwc_otg_hcd_t * hcd, dwc_otg_qh_t * qh)
 		urb->actual_length = urb->length;
 
 
+	/* lwg: this selects a free hc  --- we reserve 16... */
 	hc = DWC_CIRCLEQ_FIRST(&hcd->free_hc_list);
 
 	/* Remove the host channel from the free list. */
