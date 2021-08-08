@@ -717,7 +717,7 @@ static dwc_otg_cil_callbacks_t hcd_cil_callbacks = {
 /**
  * Reset tasklet function
  */
-static void reset_tasklet_func(void *data)
+void reset_tasklet_func(void *data)
 {
 	dwc_otg_hcd_t *dwc_otg_hcd = (dwc_otg_hcd_t *) data;
 	dwc_otg_core_if_t *core_if = dwc_otg_hcd->core_if;

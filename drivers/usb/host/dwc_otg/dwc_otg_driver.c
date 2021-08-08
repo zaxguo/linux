@@ -71,10 +71,15 @@ static const char dwc_driver_name[] = "dwc_otg";
 
 extern void *usb_base;
 void *dma_ctx;
+void *g_core_if;
+dwc_otg_device_t *g_dev;
+extern void reset_tasklet_func(void *data);
 static void replay_kernel(void *host) {
 	disable_irq(41);
 	/*wr_8(host);*/
 	wr_32(host);
+	/*dwc_otg_core_reset(g_core_if);*/
+	reset_tasklet_func(g_dev->hcd);
 	enable_irq(41);
 }
 
@@ -1028,7 +1033,9 @@ static int dwc_otg_driver_probe(
 
 	/* lwg -- */
 	dma_ctx = &_dev->dev;
-	proc_create_data("usb_replay", 0, NULL, &usb_replay_ops, usb_base);
+	g_core_if = dwc_otg_device->core_if;
+	g_dev = dwc_otg_device;
+	proc_create_data("usb_replay", 0, NULL, &usb_replay_ops, dwc_otg_device->core_if);
 	return 0;
 
 fail:
