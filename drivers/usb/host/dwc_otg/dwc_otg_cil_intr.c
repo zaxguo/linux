@@ -1412,10 +1412,11 @@ int32_t dwc_otg_handle_common_intr(void *dev)
 	dwc_otg_device_t *otg_dev = dev;
 	dwc_otg_core_if_t *core_if = otg_dev->core_if;
 	gpwrdn.d32 = DWC_READ_REG32(&core_if->core_global_regs->gpwrdn);
-
+#if 0
 	gintsts.d32 = DWC_READ_REG32(&core_if->core_global_regs->gintsts);
 	trace_printk("intr entered -- intsts = %08x\n", gintsts);
-	printk("intr entered -- intsts = %08x\n", gintsts);
+	/*printk("intr entered -- intsts = %08x\n", gintsts);*/
+#endif 
 
 	if (dwc_otg_is_device_mode(core_if))
 		core_if->frame_num = dwc_otg_get_frame_number(core_if);

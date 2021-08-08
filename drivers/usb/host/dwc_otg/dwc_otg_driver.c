@@ -59,6 +59,7 @@
 #include "dwc_otg_fiq_fsm.h"
 #include <linux/proc_fs.h>
 #include "replay/wr_8.h"
+#include "replay/wr_32.h"
 
 
 #define DWC_DRIVER_VERSION	"3.00a 10-AUG-2012"
@@ -72,7 +73,8 @@ extern void *usb_base;
 void *dma_ctx;
 static void replay_kernel(void *host) {
 	disable_irq(41);
-	wr_8(host);
+	/*wr_8(host);*/
+	wr_32(host);
 	enable_irq(41);
 }
 

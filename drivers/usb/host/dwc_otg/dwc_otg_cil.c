@@ -117,7 +117,7 @@ static void init_regmap(void) {
 
 void log_reg_rw(int rw, const char *str, uint32_t off, uint32_t value) {
 	/* do not log, directly return */
-	/*return;*/
+	return;
 #if 0
 	/* look for the code which turns on sof */
 	int i, j;

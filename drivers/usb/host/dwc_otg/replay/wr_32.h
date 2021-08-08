@@ -1,5 +1,5 @@
 #include "common.h"
-static void wr_8(void *base) {
+static void wr_32(void *base) {
 	dma_addr_t addr;
 	/* 0,&hcd->core_if->core_global_regs->gintmsk,18,f3000806 */
 	read(base, 0x18, 0xf3000806);
@@ -23,7 +23,7 @@ static void wr_8(void *base) {
 	read(base, 0x2c, 0x00080100);
 	addr = prepare_allow_medium_removal(1);
 	/* 1,&hc_regs->hctsiz,510,0008001f */
-	write(base, 0x510, 0x0008001f | ((toggle & 1) << 30));
+	write(base, 0x510, 0x0008001f);
 	/* 1,&hc_regs->hcdma,514,f7053000 */
 	write(base, 0x514, addr);
 	/* 0,&hc_regs->hcchar,500,01081200 */
@@ -31,6 +31,7 @@ static void wr_8(void *base) {
 	/* 1,&hc_regs->hcchar,500,81181200 */
 	write(base, 0x500, 0x81181200);
 	poll_for_irq(base);
+	toggle++;
 	/* 0,&core_if->core_global_regs->gpwrdn,58,00000000 */
 	read(base, 0x58, 0x00000000);
 	/* 0,&_core_if->core_global_regs->gintsts,14,06400029 */
@@ -51,8 +52,8 @@ static void wr_8(void *base) {
 	read(base, 0x18, 0xf3000806);
 	/* 0,&_core_if->core_global_regs->gintsts,14,06400029 */
 	read(base, 0x14, 0x06400029);
-	/* 0,&dwc_otg_hcd->core_if->host_if->host_global_regs->hfnum,408,00f60576 */
-	read(base, 0x408, IGNORE);
+	/* 0,&dwc_otg_hcd->core_if->host_if->host_global_regs->hfnum,408,0d2c01cd */
+	read(base, 0x408, 0xdeadbeef);
 	/* 0,&_core_if->host_if->host_global_regs->haint,414,00000001 */
 	read(base, 0x414, 0x00000001);
 	/* 0,&hc_regs->hcint,508,00000023 */
@@ -98,8 +99,7 @@ static void wr_8(void *base) {
 	/* 0,&global_regs->gnptxsts,2c,00080100 */
 	read(base, 0x2c, 0x00080100);
 	/* 1,&hc_regs->hctsiz,510,00080200 */
-	//write(base, 0x510, 0x00080200);
-	write(base, 0x510, 0x00080200 | ((toggle & 1) << 30));
+	write(base, 0x510, 0x00080200);
 	addr = prepare_csw();
 	/* 1,&hc_regs->hcdma,514,f7053000 */
 	write(base, 0x514, addr);
@@ -107,7 +107,6 @@ static void wr_8(void *base) {
 	read(base, 0x500, 0x01089200);
 	/* 1,&hc_regs->hcchar,500,81189200 */
 	write(base, 0x500, 0x81189200);
-	/* poll for irq */
 	poll_for_irq(base);
 	toggle++;
 	/* 0,&core_if->core_global_regs->gpwrdn,58,00000000 */
@@ -130,8 +129,8 @@ static void wr_8(void *base) {
 	read(base, 0x18, 0xf3000806);
 	/* 0,&_core_if->core_global_regs->gintsts,14,06400029 */
 	read(base, 0x14, 0x06400029);
-	/* 0,&dwc_otg_hcd->core_if->host_if->host_global_regs->hfnum,408,14d60579 */
-	read(base, 0x408, IGNORE);
+	/* 0,&dwc_otg_hcd->core_if->host_if->host_global_regs->hfnum,408,167101cf */
+	read(base, 0x408, 0xdeadbeef);
 	/* 0,&_core_if->host_if->host_global_regs->haint,414,00000001 */
 	read(base, 0x414, 0x00000001);
 	/* 0,&hc_regs->hcint,508,00000023 */
@@ -177,9 +176,8 @@ static void wr_8(void *base) {
 	/* 0,&global_regs->gnptxsts,2c,00080100 */
 	read(base, 0x2c, 0x00080100);
 	/* 1,&hc_regs->hctsiz,510,4008001f */
-	addr = prepare_write_10(8);
-	//write(base, 0x510, 0x4008001f);
-	write(base, 0x510, 0x0008001f | ((toggle & 1) << 30));
+	write(base, 0x510, 0x4008001f);
+	addr = prepare_write_10(32);
 	/* 1,&hc_regs->hcdma,514,f7053000 */
 	write(base, 0x514, addr);
 	/* 0,&hc_regs->hcchar,500,01081200 */
@@ -208,8 +206,8 @@ static void wr_8(void *base) {
 	read(base, 0x18, 0xf3000806);
 	/* 0,&_core_if->core_global_regs->gintsts,14,06400029 */
 	read(base, 0x14, 0x06400029);
-	/* 0,&dwc_otg_hcd->core_if->host_if->host_global_regs->hfnum,408,0f9f05d5 */
-	read(base, 0x408, IGNORE);
+	/* 0,&dwc_otg_hcd->core_if->host_if->host_global_regs->hfnum,408,0ced0225 */
+	read(base, 0x408, 0xdeadbeef);
 	/* 0,&_core_if->host_if->host_global_regs->haint,414,00000001 */
 	read(base, 0x414, 0x00000001);
 	/* 0,&hc_regs->hcint,508,00000023 */
@@ -254,16 +252,27 @@ static void wr_8(void *base) {
 	write(base, 0x18, 0xf3000806);
 	/* 0,&global_regs->gnptxsts,2c,00080100 */
 	read(base, 0x2c, 0x00080100);
-	addr = prepare_data();
 	/* 1,&hc_regs->hctsiz,510,00401000 */
-	//write(base, 0x510, 0x00401000);
-	write(base, 0x510, 0x00401000 | ((toggle & 1) << 30));
-	/* 1,&hc_regs->hcdma,514,d7a0c000 */
+	write(base, 0x510, 0x00401000);
+	addr = prepare_data();
+	/* 1,&hc_regs->hcdma,514,e0253000 */
 	write(base, 0x514, addr);
 	/* 0,&hc_regs->hcchar,500,01081200 */
 	read(base, 0x500, 0x01081200);
 	/* 1,&hc_regs->hcchar,500,81181200 */
 	write(base, 0x500, 0x81181200);
+	/* 0,&hcd->core_if->core_global_regs->gintmsk,18,f3000806 */
+	read(base, 0x18, 0xf3000806);
+	/* 0,&global_regs->gnptxsts,2c,05070100 */
+	read(base, 0x2c, 0x05070100);
+	/* 0,&hcd->core_if->core_global_regs->gintmsk,18,f3000806 */
+	read(base, 0x18, 0xf3000806);
+	/* 0,&global_regs->gnptxsts,2c,00060000 */
+	read(base, 0x2c, 0x00060000);
+	/* 0,&hcd->core_if->core_global_regs->gintmsk,18,f3000806 */
+	read(base, 0x18, 0xf3000806);
+	/* 0,&global_regs->gnptxsts,2c,00070040 */
+	read(base, 0x2c, 0x00070040);
 	poll_for_irq(base);
 	toggle++;
 	/* 0,&core_if->core_global_regs->gpwrdn,58,00000000 */
@@ -286,8 +295,233 @@ static void wr_8(void *base) {
 	read(base, 0x18, 0xf3000806);
 	/* 0,&_core_if->core_global_regs->gintsts,14,06400029 */
 	read(base, 0x14, 0x06400029);
-	/* 0,&dwc_otg_hcd->core_if->host_if->host_global_regs->hfnum,408,0ca805d9 */
-	read(base, 0x408, IGNORE);
+	/* 0,&dwc_otg_hcd->core_if->host_if->host_global_regs->hfnum,408,06750227 */
+	read(base, 0x408, 0xdeadbeef);
+	/* 0,&_core_if->host_if->host_global_regs->haint,414,00000001 */
+	read(base, 0x414, 0x00000001);
+	/* 0,&hc_regs->hcint,508,00000023 */
+	read(base, 0x508, 0x00000023);
+	/* 0,&hc_regs->hcintmsk,50c,00000006 */
+	read(base, 0x50c, 0x00000006);
+	/* 0,&hc_regs->hcint,508,00000023 */
+	read(base, 0x508, 0x00000023);
+	/* 0,&hc_regs->hcintmsk,50c,00000006 */
+	read(base, 0x50c, 0x00000006);
+	/* 0,&hc_regs->hctsiz,510,00000200 */
+	read(base, 0x510, 0x00000200);
+	/* 0,&hc_regs->hctsiz,510,00000200 */
+	read(base, 0x510, 0x00000200);
+	/* 0,&hc_regs->hcint,508,00000023 */
+	read(base, 0x508, 0x00000023);
+	/* 1,&hc_regs->hcintmsk,50c,00000000 */
+	write(base, 0x50c, 0x00000000);
+	/* 1,&hc_regs->hcint,508,ffffffff */
+	write(base, 0x508, 0xffffffff);
+	/* 1,&hc_regs->hcint,508,00003fff */
+	write(base, 0x508, 0x00003fff);
+	/* 1,&hc_regs->hcintmsk,50c,00000006 */
+	write(base, 0x50c, 0x00000006);
+	/* 1,&host_if->hc_regs[hc_num]->hcchar,500,01081200 */
+	write(base, 0x500, 0x01081200);
+	/* 1,&host_if->hc_regs[hc_num]->hcsplt,504,00000000 */
+	write(base, 0x504, 0x00000000);
+	/* 0,&hcd->core_if->host_if->host_global_regs->haintmsk,418,00000001 */
+	read(base, 0x418, 0x00000001);
+	/* 1,&hcd->core_if->host_if->host_global_regs->haintmsk,418,00000001 */
+	write(base, 0x418, 0x00000001);
+	/* 0,&hcd->core_if->core_global_regs->gintmsk,18,f3000806 */
+	read(base, 0x18, 0xf3000806);
+	/* 1,&hcd->core_if->core_global_regs->gintmsk,18,f3000806 */
+	write(base, 0x18, 0xf3000806);
+	/* 0,&global_regs->gnptxsts,2c,00080100 */
+	read(base, 0x2c, 0x00080100);
+	/* 1,&hc_regs->hctsiz,510,00401000 */
+	write(base, 0x510, 0x00401000);
+	addr = prepare_data();
+	/* 1,&hc_regs->hcdma,514,d8824000 */
+	write(base, 0x514, addr);
+	/* 0,&hc_regs->hcchar,500,01081200 */
+	read(base, 0x500, 0x01081200);
+	/* 1,&hc_regs->hcchar,500,81181200 */
+	write(base, 0x500, 0x81181200);
+	/* 0,&(hc_regs)->hcintmsk,50c,00000006 */
+	read(base, 0x50c, 0x00000006);
+	/* 1,&(hc_regs)->hcintmsk,50c,00000006 */
+	write(base, 0x50c, 0x00000006);
+	poll_for_irq(base);
+	toggle++;
+	/* 0,&core_if->core_global_regs->gpwrdn,58,00000000 */
+	read(base, 0x58, 0x00000000);
+	/* 0,&_core_if->core_global_regs->gintsts,14,06400029 */
+	read(base, 0x14, 0x06400029);
+	/* 0,&_core_if->core_global_regs->gintsts,14,06400029 */
+	read(base, 0x14, 0x06400029);
+	/* 0,&core_if->core_global_regs->gintsts,14,06400029 */
+	read(base, 0x14, 0x06400029);
+	/* 0,&core_if->core_global_regs->gintmsk,18,f3000806 */
+	read(base, 0x18, 0xf3000806);
+	/* 0,&core_if->core_global_regs->gahbcfg,8,00000031 */
+	read(base, 0x8, 0x00000031);
+	/* 0,&_core_if->core_global_regs->gintsts,14,06400029 */
+	read(base, 0x14, 0x06400029);
+	/* 0,&core_if->core_global_regs->gintsts,14,06400029 */
+	read(base, 0x14, 0x06400029);
+	/* 0,&core_if->core_global_regs->gintmsk,18,f3000806 */
+	read(base, 0x18, 0xf3000806);
+	/* 0,&_core_if->core_global_regs->gintsts,14,06400029 */
+	read(base, 0x14, 0x06400029);
+	/* 0,&dwc_otg_hcd->core_if->host_if->host_global_regs->hfnum,408,002a0228 */
+	read(base, 0x408, 0xdeadbeef);
+	/* 0,&_core_if->host_if->host_global_regs->haint,414,00000001 */
+	read(base, 0x414, 0x00000001);
+	/* 0,&hc_regs->hcint,508,00000023 */
+	read(base, 0x508, 0x00000023);
+	/* 0,&hc_regs->hcintmsk,50c,00000006 */
+	read(base, 0x50c, 0x00000006);
+	/* 0,&hc_regs->hcint,508,00000023 */
+	read(base, 0x508, 0x00000023);
+	/* 0,&hc_regs->hcintmsk,50c,00000006 */
+	read(base, 0x50c, 0x00000006);
+	/* 0,&hc_regs->hctsiz,510,00000200 */
+	read(base, 0x510, 0x00000200);
+	/* 0,&hc_regs->hctsiz,510,00000200 */
+	read(base, 0x510, 0x00000200);
+	/* 0,&hc_regs->hcint,508,00000023 */
+	read(base, 0x508, 0x00000023);
+	/* 1,&hc_regs->hcintmsk,50c,00000000 */
+	write(base, 0x50c, 0x00000000);
+	/* 1,&hc_regs->hcint,508,ffffffff */
+	write(base, 0x508, 0xffffffff);
+	/* 1,&hc_regs->hcint,508,00003fff */
+	write(base, 0x508, 0x00003fff);
+	/* 1,&hc_regs->hcintmsk,50c,00000006 */
+	write(base, 0x50c, 0x00000006);
+	/* 1,&host_if->hc_regs[hc_num]->hcchar,500,01081200 */
+	write(base, 0x500, 0x01081200);
+	/* 1,&host_if->hc_regs[hc_num]->hcsplt,504,00000000 */
+	write(base, 0x504, 0x00000000);
+	/* 0,&hcd->core_if->host_if->host_global_regs->haintmsk,418,00000001 */
+	read(base, 0x418, 0x00000001);
+	/* 1,&hcd->core_if->host_if->host_global_regs->haintmsk,418,00000001 */
+	write(base, 0x418, 0x00000001);
+	/* 0,&hcd->core_if->core_global_regs->gintmsk,18,f3000806 */
+	read(base, 0x18, 0xf3000806);
+	/* 1,&hcd->core_if->core_global_regs->gintmsk,18,f3000806 */
+	write(base, 0x18, 0xf3000806);
+	/* 0,&global_regs->gnptxsts,2c,00080100 */
+	read(base, 0x2c, 0x00080100);
+	/* 1,&hc_regs->hctsiz,510,00401000 */
+	write(base, 0x510, 0x00401000);
+	addr = prepare_data();
+	/* 1,&hc_regs->hcdma,514,db6c5000 */
+	write(base, 0x514, addr);
+	/* 0,&hc_regs->hcchar,500,01081200 */
+	read(base, 0x500, 0x01081200);
+	/* 1,&hc_regs->hcchar,500,81181200 */
+	write(base, 0x500, 0x81181200);
+	/* 0,&(hc_regs)->hcintmsk,50c,00000006 */
+	read(base, 0x50c, 0x00000006);
+	/* 1,&(hc_regs)->hcintmsk,50c,00000006 */
+	write(base, 0x50c, 0x00000006);
+	poll_for_irq(base);
+	toggle++;
+	/* 0,&core_if->core_global_regs->gpwrdn,58,00000000 */
+	read(base, 0x58, 0x00000000);
+	/* 0,&_core_if->core_global_regs->gintsts,14,06400029 */
+	read(base, 0x14, 0x06400029);
+	/* 0,&_core_if->core_global_regs->gintsts,14,06400029 */
+	read(base, 0x14, 0x06400029);
+	/* 0,&core_if->core_global_regs->gintsts,14,06400029 */
+	read(base, 0x14, 0x06400029);
+	/* 0,&core_if->core_global_regs->gintmsk,18,f3000806 */
+	read(base, 0x18, 0xf3000806);
+	/* 0,&core_if->core_global_regs->gahbcfg,8,00000031 */
+	read(base, 0x8, 0x00000031);
+	/* 0,&_core_if->core_global_regs->gintsts,14,06400029 */
+	read(base, 0x14, 0x06400029);
+	/* 0,&core_if->core_global_regs->gintsts,14,06400029 */
+	read(base, 0x14, 0x06400029);
+	/* 0,&core_if->core_global_regs->gintmsk,18,f3000806 */
+	read(base, 0x18, 0xf3000806);
+	/* 0,&_core_if->core_global_regs->gintsts,14,06400029 */
+	read(base, 0x14, 0x06400029);
+	/* 0,&dwc_otg_hcd->core_if->host_if->host_global_regs->hfnum,408,107d022a */
+	read(base, 0x408, 0xdeadbeef);
+	/* 0,&_core_if->host_if->host_global_regs->haint,414,00000001 */
+	read(base, 0x414, 0x00000001);
+	/* 0,&hc_regs->hcint,508,00000023 */
+	read(base, 0x508, 0x00000023);
+	/* 0,&hc_regs->hcintmsk,50c,00000006 */
+	read(base, 0x50c, 0x00000006);
+	/* 0,&hc_regs->hcint,508,00000023 */
+	read(base, 0x508, 0x00000023);
+	/* 0,&hc_regs->hcintmsk,50c,00000006 */
+	read(base, 0x50c, 0x00000006);
+	/* 0,&hc_regs->hctsiz,510,00000200 */
+	read(base, 0x510, 0x00000200);
+	/* 0,&hc_regs->hctsiz,510,00000200 */
+	read(base, 0x510, 0x00000200);
+	/* 0,&hc_regs->hcint,508,00000023 */
+	read(base, 0x508, 0x00000023);
+	/* 1,&hc_regs->hcintmsk,50c,00000000 */
+	write(base, 0x50c, 0x00000000);
+	/* 1,&hc_regs->hcint,508,ffffffff */
+	write(base, 0x508, 0xffffffff);
+	/* 1,&hc_regs->hcint,508,00003fff */
+	write(base, 0x508, 0x00003fff);
+	/* 1,&hc_regs->hcintmsk,50c,00000006 */
+	write(base, 0x50c, 0x00000006);
+	/* 1,&host_if->hc_regs[hc_num]->hcchar,500,01081200 */
+	write(base, 0x500, 0x01081200);
+	/* 1,&host_if->hc_regs[hc_num]->hcsplt,504,00000000 */
+	write(base, 0x504, 0x00000000);
+	/* 0,&hcd->core_if->host_if->host_global_regs->haintmsk,418,00000001 */
+	read(base, 0x418, 0x00000001);
+	/* 1,&hcd->core_if->host_if->host_global_regs->haintmsk,418,00000001 */
+	write(base, 0x418, 0x00000001);
+	/* 0,&hcd->core_if->core_global_regs->gintmsk,18,f3000806 */
+	read(base, 0x18, 0xf3000806);
+	/* 1,&hcd->core_if->core_global_regs->gintmsk,18,f3000806 */
+	write(base, 0x18, 0xf3000806);
+	/* 0,&global_regs->gnptxsts,2c,00080100 */
+	read(base, 0x2c, 0x00080100);
+	/* 1,&hc_regs->hctsiz,510,00401000 */
+	write(base, 0x510, 0x00401000);
+	addr = prepare_data();
+	/* 1,&hc_regs->hcdma,514,d7546000 */
+	write(base, 0x514, addr);
+	/* 0,&hc_regs->hcchar,500,01081200 */
+	read(base, 0x500, 0x01081200);
+	/* 1,&hc_regs->hcchar,500,81181200 */
+	write(base, 0x500, 0x81181200);
+	/* 0,&(hc_regs)->hcintmsk,50c,00000006 */
+	read(base, 0x50c, 0x00000006);
+	/* 1,&(hc_regs)->hcintmsk,50c,00000006 */
+	write(base, 0x50c, 0x00000006);
+	poll_for_irq(base);
+	toggle++;
+	/* 0,&core_if->core_global_regs->gpwrdn,58,00000000 */
+	read(base, 0x58, 0x00000000);
+	/* 0,&_core_if->core_global_regs->gintsts,14,06400029 */
+	read(base, 0x14, 0x06400029);
+	/* 0,&_core_if->core_global_regs->gintsts,14,06400029 */
+	read(base, 0x14, 0x06400029);
+	/* 0,&core_if->core_global_regs->gintsts,14,06400029 */
+	read(base, 0x14, 0x06400029);
+	/* 0,&core_if->core_global_regs->gintmsk,18,f3000806 */
+	read(base, 0x18, 0xf3000806);
+	/* 0,&core_if->core_global_regs->gahbcfg,8,00000031 */
+	read(base, 0x8, 0x00000031);
+	/* 0,&_core_if->core_global_regs->gintsts,14,06400029 */
+	read(base, 0x14, 0x06400029);
+	/* 0,&core_if->core_global_regs->gintsts,14,06400029 */
+	read(base, 0x14, 0x06400029);
+	/* 0,&core_if->core_global_regs->gintmsk,18,f3000806 */
+	read(base, 0x18, 0xf3000806);
+	/* 0,&_core_if->core_global_regs->gintsts,14,06400029 */
+	read(base, 0x14, 0x06400029);
+	/* 0,&dwc_otg_hcd->core_if->host_if->host_global_regs->hfnum,408,07c8022b */
+	read(base, 0x408, 0xdeadbeef);
 	/* 0,&_core_if->host_if->host_global_regs->haint,414,00000001 */
 	read(base, 0x414, 0x00000001);
 	/* 0,&hc_regs->hcint,508,00000023 */
@@ -332,10 +566,9 @@ static void wr_8(void *base) {
 	write(base, 0x18, 0xf3000806);
 	/* 0,&global_regs->gnptxsts,2c,00080100 */
 	read(base, 0x2c, 0x00080100);
-	addr = prepare_csw();
 	/* 1,&hc_regs->hctsiz,510,40080200 */
-	//write(base, 0x510, 0x40080200);
-	write(base, 0x510, 0x00080200 | ((toggle & 1) << 30));
+	write(base, 0x510, 0x40080200);
+	addr = prepare_csw();
 	/* 1,&hc_regs->hcdma,514,f7053000 */
 	write(base, 0x514, addr);
 	/* 0,&hc_regs->hcchar,500,01089200 */
@@ -364,8 +597,8 @@ static void wr_8(void *base) {
 	read(base, 0x18, 0xf3000806);
 	/* 0,&_core_if->core_global_regs->gintsts,14,06400029 */
 	read(base, 0x14, 0x06400029);
-	/* 0,&dwc_otg_hcd->core_if->host_if->host_global_regs->hfnum,408,083105df */
-	read(base, 0x408, IGNORE);
+	/* 0,&dwc_otg_hcd->core_if->host_if->host_global_regs->hfnum,408,06b70232 */
+	read(base, 0x408, 0xdeadbeef);
 	/* 0,&_core_if->host_if->host_global_regs->haint,414,00000001 */
 	read(base, 0x414, 0x00000001);
 	/* 0,&hc_regs->hcint,508,00000023 */
@@ -410,9 +643,9 @@ static void wr_8(void *base) {
 	write(base, 0x18, 0xf3000806);
 	/* 0,&global_regs->gnptxsts,2c,00080100 */
 	read(base, 0x2c, 0x00080100);
-	addr = prepare_allow_medium_removal(0);
 	/* 1,&hc_regs->hctsiz,510,0008001f */
-	write(base, 0x510, 0x0008001f | ((toggle & 1) << 30));
+	write(base, 0x510, 0x0008001f);
+	addr = prepare_allow_medium_removal(0);
 	/* 1,&hc_regs->hcdma,514,f7053000 */
 	write(base, 0x514, addr);
 	/* 0,&hc_regs->hcchar,500,01081200 */
@@ -420,6 +653,7 @@ static void wr_8(void *base) {
 	/* 1,&hc_regs->hcchar,500,81181200 */
 	write(base, 0x500, 0x81181200);
 	poll_for_irq(base);
+	toggle++;
 	/* 0,&core_if->core_global_regs->gpwrdn,58,00000000 */
 	read(base, 0x58, 0x00000000);
 	/* 0,&_core_if->core_global_regs->gintsts,14,06400029 */
@@ -440,8 +674,8 @@ static void wr_8(void *base) {
 	read(base, 0x18, 0xf3000806);
 	/* 0,&_core_if->core_global_regs->gintsts,14,06400029 */
 	read(base, 0x14, 0x06400029);
-	/* 0,&dwc_otg_hcd->core_if->host_if->host_global_regs->hfnum,408,11880634 */
-	read(base, 0x408, IGNORE);
+	/* 0,&dwc_otg_hcd->core_if->host_if->host_global_regs->hfnum,408,037b0280 */
+	read(base, 0x408, 0xdeadbeef);
 	/* 0,&_core_if->host_if->host_global_regs->haint,414,00000001 */
 	read(base, 0x414, 0x00000001);
 	/* 0,&hc_regs->hcint,508,00000023 */
@@ -487,7 +721,7 @@ static void wr_8(void *base) {
 	/* 0,&global_regs->gnptxsts,2c,00080100 */
 	read(base, 0x2c, 0x00080100);
 	/* 1,&hc_regs->hctsiz,510,00080200 */
-	write(base, 0x510, 0x00080200 | ((toggle & 1) << 30));
+	write(base, 0x510, 0x00080200);
 	addr = prepare_csw();
 	/* 1,&hc_regs->hcdma,514,f7053000 */
 	write(base, 0x514, addr);
@@ -496,6 +730,7 @@ static void wr_8(void *base) {
 	/* 1,&hc_regs->hcchar,500,81189200 */
 	write(base, 0x500, 0x81189200);
 	poll_for_irq(base);
+	toggle++;
 	/* 0,&core_if->core_global_regs->gpwrdn,58,00000000 */
 	read(base, 0x58, 0x00000000);
 	/* 0,&_core_if->core_global_regs->gintsts,14,06400029 */
@@ -516,8 +751,8 @@ static void wr_8(void *base) {
 	read(base, 0x18, 0xf3000806);
 	/* 0,&_core_if->core_global_regs->gintsts,14,06400029 */
 	read(base, 0x14, 0x06400029);
-	/* 0,&dwc_otg_hcd->core_if->host_if->host_global_regs->hfnum,408,0a950636 */
-	read(base, 0x408, IGNORE);
+	/* 0,&dwc_otg_hcd->core_if->host_if->host_global_regs->hfnum,408,171f0282 */
+	read(base, 0x408, 0xdeadbeef);
 	/* 0,&_core_if->host_if->host_global_regs->haint,414,00000001 */
 	read(base, 0x414, 0x00000001);
 	/* 0,&hc_regs->hcint,508,00000023 */
@@ -542,5 +777,4 @@ static void wr_8(void *base) {
 	read(base, 0x50c, 0x00000000);
 	/* 1,&(hc_regs)->hcintmsk,50c,00000000 */
 	write(base, 0x50c, 0x00000000);
-	toggle++;
 }
