@@ -137,6 +137,17 @@ static void _poll_value_with_max_tries(void *addr, int val, int tries, int line)
 	}
 }
 
+static void _poll_less_than_with_max_tries(void *addr, int val, int tries, int line) {
+	u32 ret;
+	do {
+		ret = readl(addr);
+		udelay(1);
+	} while ((--tries) && (ret < val));
+	if (tries == 0) {
+		printk("timeout[%d]! %08x != %08x\n", line, ret, val);
+	}
+}
+
 /* assuming a fixed ep number 2 */
 static void reset_ep(void) {
 
@@ -168,6 +179,7 @@ static inline void write(void *base, u32 off, u32 val) {
 #define poll_for_irq(b) _poll_for_irq((b), __LINE__)
 #define poll_bit_with_max_tries(b, v, t) _poll_bit_with_max_tries((b), (v), (t), __LINE__)
 #define poll_value_with_max_tries(b, v, t) _poll_value_with_max_tries((b), (v), (t), __LINE__)
+#define poll_less_than_with_max_tries(b, v, t) _poll_value_with_max_tries((b), (v), (t), __LINE__)
 
 #endif __COMMON_REPLAY_H
 
