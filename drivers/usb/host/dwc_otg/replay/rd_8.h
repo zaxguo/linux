@@ -1,7 +1,7 @@
-#include "common.h"
-static void wr_8(void *base) {
-	dma_addr_t data, cmd;
-	data = prepare_data();
+#include"common.h"
+static void rd_8(void *base)
+{
+	dma_addr_t cmd, data;
 	/* 0,&hcd->core_if->core_global_regs->gintmsk,18,f3000806 : 18 */
 	read(base, 0x18, 0xf3000806);
 	/* 1,&hc_regs->hcint,508,00003fff : 19 */
@@ -20,10 +20,13 @@ static void wr_8(void *base) {
 	read(base, 0x18, 0xf3000806);
 	/* 1,&hcd->core_if->core_global_regs->gintmsk,18,f3000806 : 26 */
 	write(base, 0x18, 0xf3000806);
-	udelay(10);
+	u32 val;
+	do {
+		val = readl(base + 0x2c);
+	} while (val < 0x00080100);
+	cmd = prepare_allow_medium_removal(1);
 	/* 0,&global_regs->gnptxsts,2c,00080100 : 27 */
 	read(base, 0x2c, 0x00080100);
-	cmd = prepare_allow_medium_removal(1);
 	/* 1,&hc_regs->hctsiz,510,0008001f : 28 */
 	write(base, 0x510, 0x0008001f);
 	/* 1,&hc_regs->hcdma,514,f7053000 : 33 */
@@ -53,7 +56,7 @@ static void wr_8(void *base) {
 	read(base, 0x18, 0xf3000806);
 	/* 0,&_core_if->core_global_regs->gintsts,14,06400029 : 45 */
 	read(base, 0x14, 0x06400029);
-	/* 0,&dwc_otg_hcd->core_if->host_if->host_global_regs->hfnum,408,00f60576 : 46 */
+	/* 0,&dwc_otg_hcd->core_if->host_if->host_global_regs->hfnum,408,12693af9 : 46 */
 	read(base, 0x408, IGNORE);
 	/* 0,&_core_if->host_if->host_global_regs->haint,414,00000001 : 47 */
 	read(base, 0x414, 0x00000001);
@@ -99,6 +102,9 @@ static void wr_8(void *base) {
 	write(base, 0x18, 0xf3000806);
 	udelay(10);
 	/* 0,&global_regs->gnptxsts,2c,00080100 : 72 */
+	do {
+		val = readl(base + 0x2c);
+	} while (val < 0x00080100);
 	read(base, 0x2c, 0x00080100);
 	/* 1,&hc_regs->hctsiz,510,00080200 : 73 */
 	write(base, 0x510, 0x00080200);
@@ -129,7 +135,7 @@ static void wr_8(void *base) {
 	read(base, 0x18, 0xf3000806);
 	/* 0,&_core_if->core_global_regs->gintsts,14,06400029 : 90 */
 	read(base, 0x14, 0x06400029);
-	/* 0,&dwc_otg_hcd->core_if->host_if->host_global_regs->hfnum,408,14d60579 : 91 */
+	/* 0,&dwc_otg_hcd->core_if->host_if->host_global_regs->hfnum,408,0d293afa : 91 */
 	read(base, 0x408, IGNORE);
 	/* 0,&_core_if->host_if->host_global_regs->haint,414,00000001 : 92 */
 	read(base, 0x414, 0x00000001);
@@ -173,8 +179,10 @@ static void wr_8(void *base) {
 	read(base, 0x18, 0xf3000806);
 	/* 1,&hcd->core_if->core_global_regs->gintmsk,18,f3000806 : 120 */
 	write(base, 0x18, 0xf3000806);
-	cmd = prepare_write_10(8);
-	poll_value_with_max_tries(base + 0x2c, 0x00080100, 200);
+	cmd = prepare_read_10(8);
+	do {
+		val = readl(base + 0x2c);
+	} while (val < 0x00080100);
 	/* 0,&global_regs->gnptxsts,2c,00080100 : 121 */
 	read(base, 0x2c, 0x00080100);
 	/* 1,&hc_regs->hctsiz,510,4008001f : 122 */
@@ -206,7 +214,7 @@ static void wr_8(void *base) {
 	read(base, 0x18, 0xf3000806);
 	/* 0,&_core_if->core_global_regs->gintsts,14,06400029 : 139 */
 	read(base, 0x14, 0x06400029);
-	/* 0,&dwc_otg_hcd->core_if->host_if->host_global_regs->hfnum,408,0f9f05d5 : 140 */
+	/* 0,&dwc_otg_hcd->core_if->host_if->host_global_regs->hfnum,408,19a43b47 : 140 */
 	read(base, 0x408, IGNORE);
 	/* 0,&_core_if->host_if->host_global_regs->haint,414,00000001 : 141 */
 	read(base, 0x414, 0x00000001);
@@ -238,8 +246,8 @@ static void wr_8(void *base) {
 	write(base, 0x508, 0x00003fff);
 	/* 1,&hc_regs->hcintmsk,50c,00000006 : 155 */
 	write(base, 0x50c, 0x00000006);
-	/* 1,&host_if->hc_regs[hc_num]->hcchar,500,01081200 : 156 */
-	write(base, 0x500, 0x01081200);
+	/* 1,&host_if->hc_regs[hc_num]->hcchar,500,01089200 : 156 */
+	write(base, 0x500, 0x01089200);
 	/* 1,&host_if->hc_regs[hc_num]->hcsplt,504,00000000 : 157 */
 	write(base, 0x504, 0x00000000);
 	/* 0,&hcd->core_if->host_if->host_global_regs->haintmsk,418,00000001 : 158 */
@@ -250,17 +258,19 @@ static void wr_8(void *base) {
 	read(base, 0x18, 0xf3000806);
 	/* 1,&hcd->core_if->core_global_regs->gintmsk,18,f3000806 : 161 */
 	write(base, 0x18, 0xf3000806);
-	poll_value_with_max_tries(base + 0x2c, 0x00080100, 200);
+	do {
+		val = readl(base + 0x2c);
+	} while (val < 0x00080100);
 	/* 0,&global_regs->gnptxsts,2c,00080100 : 162 */
 	read(base, 0x2c, 0x00080100);
-	/* 1,&hc_regs->hctsiz,510,00401000 : 163 */
-	write(base, 0x510, 0x00401000);
-	/* 1,&hc_regs->hcdma,514,d7a0c000 : 168 */
+	/* 1,&hc_regs->hctsiz,510,40401000 : 163 */
+	write(base, 0x510, 0x40401000);
+	/* 1,&hc_regs->hcdma,514,db6c6000 : 168 */
 	write(base, 0x514, data);
-	/* 0,&hc_regs->hcchar,500,01081200 : 169 */
-	read(base, 0x500, 0x01081200);
-	/* 1,&hc_regs->hcchar,500,81181200 : 170 */
-	write(base, 0x500, 0x81181200);
+	/* 0,&hc_regs->hcchar,500,01089200 : 169 */
+	read(base, 0x500, 0x01089200);
+	/* 1,&hc_regs->hcchar,500,81189200 : 170 */
+	write(base, 0x500, 0x81189200);
 	poll_for_irq(base);
 	/* 0,&core_if->core_global_regs->gpwrdn,58,00000000 : 171 */
 	read(base, 0x58, 0x00000000);
@@ -282,7 +292,7 @@ static void wr_8(void *base) {
 	read(base, 0x18, 0xf3000806);
 	/* 0,&_core_if->core_global_regs->gintsts,14,06400029 : 180 */
 	read(base, 0x14, 0x06400029);
-	/* 0,&dwc_otg_hcd->core_if->host_if->host_global_regs->hfnum,408,0ca805d9 : 181 */
+	/* 0,&dwc_otg_hcd->core_if->host_if->host_global_regs->hfnum,408,04d73b49 : 181 */
 	read(base, 0x408, IGNORE);
 	/* 0,&_core_if->host_if->host_global_regs->haint,414,00000001 : 182 */
 	read(base, 0x414, 0x00000001);
@@ -294,10 +304,10 @@ static void wr_8(void *base) {
 	read(base, 0x508, 0x00000023);
 	/* 0,&hc_regs->hcintmsk,50c,00000006 : 186 */
 	read(base, 0x50c, 0x00000006);
-	/* 0,&hc_regs->hctsiz,510,00000200 : 187 */
-	read(base, 0x510, 0x00000200);
-	/* 0,&hc_regs->hctsiz,510,00000200 : 188 */
-	read(base, 0x510, 0x00000200);
+	/* 0,&hc_regs->hctsiz,510,c0000000 : 187 */
+	read(base, 0x510, 0xc0000000);
+	/* 0,&hc_regs->hctsiz,510,c0000000 : 188 */
+	read(base, 0x510, 0xc0000000);
 	/* 0,&hc_regs->hcint,508,00000023 : 189 */
 	read(base, 0x508, 0x00000023);
 	/* 1,&hc_regs->hcintmsk,50c,00000000 : 190 */
@@ -358,7 +368,7 @@ static void wr_8(void *base) {
 	read(base, 0x18, 0xf3000806);
 	/* 0,&_core_if->core_global_regs->gintsts,14,06400029 : 226 */
 	read(base, 0x14, 0x06400029);
-	/* 0,&dwc_otg_hcd->core_if->host_if->host_global_regs->hfnum,408,083105df : 227 */
+	/* 0,&dwc_otg_hcd->core_if->host_if->host_global_regs->hfnum,408,06153b4a : 227 */
 	read(base, 0x408, IGNORE);
 	/* 0,&_core_if->host_if->host_global_regs->haint,414,00000001 : 228 */
 	read(base, 0x414, 0x00000001);
@@ -403,6 +413,7 @@ static void wr_8(void *base) {
 	/* 1,&hcd->core_if->core_global_regs->gintmsk,18,f3000806 : 256 */
 	write(base, 0x18, 0xf3000806);
 	cmd = prepare_allow_medium_removal(0);
+	udelay(10);
 	/* 0,&global_regs->gnptxsts,2c,00080100 : 257 */
 	read(base, 0x2c, 0x00080100);
 	/* 1,&hc_regs->hctsiz,510,0008001f : 258 */
@@ -434,7 +445,7 @@ static void wr_8(void *base) {
 	read(base, 0x18, 0xf3000806);
 	/* 0,&_core_if->core_global_regs->gintsts,14,06400029 : 275 */
 	read(base, 0x14, 0x06400029);
-	/* 0,&dwc_otg_hcd->core_if->host_if->host_global_regs->hfnum,408,11880634 : 276 */
+	/* 0,&dwc_otg_hcd->core_if->host_if->host_global_regs->hfnum,408,0ff33b8d : 276 */
 	read(base, 0x408, IGNORE);
 	/* 0,&_core_if->host_if->host_global_regs->haint,414,00000001 : 277 */
 	read(base, 0x414, 0x00000001);
@@ -478,7 +489,7 @@ static void wr_8(void *base) {
 	read(base, 0x18, 0xf3000806);
 	/* 1,&hcd->core_if->core_global_regs->gintmsk,18,f3000806 : 301 */
 	write(base, 0x18, 0xf3000806);
-	poll_value_with_max_tries(base + 0x2c, 0x00080100, 2000);
+	udelay(10);
 	/* 0,&global_regs->gnptxsts,2c,00080100 : 302 */
 	read(base, 0x2c, 0x00080100);
 	/* 1,&hc_regs->hctsiz,510,00080200 : 303 */
@@ -510,7 +521,7 @@ static void wr_8(void *base) {
 	read(base, 0x18, 0xf3000806);
 	/* 0,&_core_if->core_global_regs->gintsts,14,06400029 : 320 */
 	read(base, 0x14, 0x06400029);
-	/* 0,&dwc_otg_hcd->core_if->host_if->host_global_regs->hfnum,408,0a950636 : 321 */
+	/* 0,&dwc_otg_hcd->core_if->host_if->host_global_regs->hfnum,408,098a3b8e : 321 */
 	read(base, 0x408, IGNORE);
 	/* 0,&_core_if->host_if->host_global_regs->haint,414,00000001 : 322 */
 	read(base, 0x414, 0x00000001);

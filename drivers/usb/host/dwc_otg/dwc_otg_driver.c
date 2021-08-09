@@ -59,9 +59,11 @@
 #include "dwc_otg_fiq_fsm.h"
 #include <linux/proc_fs.h>
 #include "replay/wr_8.h"
-#include "replay/wr_32.h"
+#include "replay/wr_32_2.h"
 #include "replay/wr_128.h"
 #include "replay/wr_256.h"
+#include "replay/rd_8.h"
+#include "replay/rd_32.h"
 
 
 #define DWC_DRIVER_VERSION	"3.00a 10-AUG-2012"
@@ -85,21 +87,26 @@ static void replay_kernel(void *host) {
 		/*volatile uint32_t *addr = &g_core_if->dev_if->in_ep_regs[i]->diepctl;*/
 		volatile uint32_t *addr = &g_core_if->dev_if->out_ep_regs[i]->doepctl;
 		data.d32 = DWC_READ_REG32(addr);
-		printk("ep[%d] ctl = %08x\n", i, data.d32);
-		data.b.stall = 0;
-		data.b.setd0pid = 1; /* reset data 0 */
-		DWC_WRITE_REG32(addr, data.d32);
-		udelay(10);
+		printk("ep[%d] ctl = %08x, type = %02x, setd0pid = %d, setd1pid = %d\n", i, data.d32, data.b.eptype, data.b.setd0pid, data.b.setd1pid);
+		if (data.b.eptype == 0x2) {
+			data.b.stall = 0;
+			data.b.setd0pid = 1; /* reset data 0 */
+			/*data.b.epena = 1; */
+			DWC_WRITE_REG32(addr, data.d32);
+			udelay(100);
+		}
 	}
 #endif
 	printk("start...\n");
 	struct timeval start, end;
 	int us_diff = 0;
-	/*wr_8(host);*/
 	do_gettimeofday(&start);
+	/*rd_8(host);*/
+	rd_32(host);
+	/*wr_8(host);*/
 	/*wr_32(host);*/
 	/*wr_128(host);*/
-	wr_256(host);
+	/*wr_256(host);*/
 	do_gettimeofday(&end);
 	us_diff = (end.tv_sec - start.tv_sec)*1000000 + (end.tv_usec - start.tv_usec);
 	printk("done... time = %08d\n", us_diff);

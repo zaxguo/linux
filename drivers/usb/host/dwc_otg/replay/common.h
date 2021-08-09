@@ -42,6 +42,18 @@ static dma_addr_t prepare_data(void) {
 	return addr;
 }
 
+static dma_addr_t prepare_read_10(uint8_t len) {
+	dma_addr_t addr;
+	void *virt = dma_zalloc_coherent(dma_ctx, 31, &addr, GFP_KERNEL);
+	int *word = (int *)virt;
+	*word = 0x43425355;
+	*(word + 1) = tag_cnt++;
+	*(word + 2) = len * 512;
+	*(word + 3) = 0x280a0080;
+	*(uint8_t *)(virt + 0x17) = len;
+	return addr;
+}
+
 static dma_addr_t prepare_write_10(uint8_t len) {
 	dma_addr_t addr;
 	void *virt = dma_zalloc_coherent(dma_ctx, 31, &addr, GFP_KERNEL);
@@ -50,15 +62,31 @@ static dma_addr_t prepare_write_10(uint8_t len) {
 	*word = 0x43425355;
 	/* tag */
 	*(word + 1) = tag_cnt++;
-	*(word + 2) = 0x00001000;
-	if (len == 32) {
+	*(word + 2) = len * 512;
+#if 0
+	if (len == 8) {
+		*(word + 2) = 0x00001000;
+	} else if(len == 16) {
+		*(word + 2) = 0x00002000;
+	} else if (len == 32) {
 		*(word + 2) = 0x00004000;
 	} else if(len == 128) {
 		*(word + 2) = 0x00010000;
+	} else if (len == 240) {
+		*(word + 2) = 0x00020000;
+	} else {
+		printk("unsupported!!\n");
 	}
+#endif
 	*(word + 3) = 0x2a0a0000;
 	/* # of sectors */
 	*(uint8_t *)(virt + 0x17) = len;
+#if 0
+	if (len == 240) {
+		*(uint8_t *)(virt + 0x17) = 0x10;
+		*(uint8_t *)(virt + 0x14) = 0xf0;
+	}
+#endif
 	//print_hex_dump(KERN_WARNING, "bcd:", DUMP_PREFIX_ADDRESS, 16, 4, virt, 31, 1);
 	command_virt = virt;
 	return addr;
@@ -68,7 +96,7 @@ static void dump_csw(void) {
 	//print_hex_dump(KERN_WARNING, "csw:", DUMP_PREFIX_ADDRESS, 16, 4, command_virt, 13, 1);
 }
 
-static void poll_for_irq(void *host) {
+static void _poll_for_irq(void *host, int line) {
 	int tries = 0;
 	u32 val = 0;
 	do {
@@ -77,21 +105,36 @@ static void poll_for_irq(void *host) {
 		tries++;
 		// taken value from device_hibernation_restore
 		if (tries > 20000){
-			printk("poll failed for IRQ!!! val = %08x\n", val);
+			printk("poll failed for IRQ[%d]!!! val = %08x\n", line, val);
 			break;
 		}
-		//udelay(1);
+		udelay(1);
 		/* hcintr bit */
 	} while((val &= 0x02000000) == 0);
 }
 
-static void poll_bit_with_max_tries(void *addr, int bit, int tries) {
+static void _poll_bit_with_max_tries(void *addr, int bit, int tries, int line) {
 	int ret = 0;
-	int i = tries;
 	do {
 		ret = readl(addr);
 		udelay(1);
 	} while((--tries) && ((ret &= (1 << bit)) == 0));
+	if (tries == 0) {
+		printk("timeout[%d]! ret = %08x\n", line, ret);
+	}
+
+}
+
+static void _poll_value_with_max_tries(void *addr, int val, int tries, int line) {
+	int ret;
+	int i = tries;
+	do {
+		ret = readl(addr);
+		udelay(10);
+	} while ((--tries) && (ret != val));
+	if (tries == 0) {
+		printk("timeout[%d]! %08x != %08x\n", line, ret, val);
+	}
 }
 
 /* assuming a fixed ep number 2 */
@@ -122,6 +165,9 @@ static inline void write(void *base, u32 off, u32 val) {
 	writel(val, base + off);
 }
 #define read(b, o, v) _read((b), (o), (v), __LINE__)
+#define poll_for_irq(b) _poll_for_irq((b), __LINE__)
+#define poll_bit_with_max_tries(b, v, t) _poll_bit_with_max_tries((b), (v), (t), __LINE__)
+#define poll_value_with_max_tries(b, v, t) _poll_value_with_max_tries((b), (v), (t), __LINE__)
 
 #endif __COMMON_REPLAY_H
 

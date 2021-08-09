@@ -259,7 +259,7 @@ static void wr_32(void *base) {
 	read(base, 0x2c, 0x00080100);
 	/* 1,&hc_regs->hctsiz,510,00401000 */
 	write(base, 0x510, 0x00401000);
-	addr = prepare_data();
+	//addr = prepare_data();
 	/* 1,&hc_regs->hcdma,514,e0253000 */
 	write(base, 0x514, addr);
 	/* 0,&hc_regs->hcchar,500,01081200 */
@@ -348,7 +348,7 @@ static void wr_32(void *base) {
 	read(base, 0x2c, 0x00080100);
 	/* 1,&hc_regs->hctsiz,510,00401000 */
 	write(base, 0x510, 0x00401000);
-	addr = prepare_data();
+	//addr = prepare_data();
 	/* 1,&hc_regs->hcdma,514,d8824000 */
 	write(base, 0x514, addr);
 	/* 0,&hc_regs->hcchar,500,01081200 */
@@ -424,7 +424,7 @@ static void wr_32(void *base) {
 	read(base, 0x2c, 0x00080100);
 	/* 1,&hc_regs->hctsiz,510,00401000 */
 	write(base, 0x510, 0x00401000);
-	addr = prepare_data();
+	//addr = prepare_data();
 	/* 1,&hc_regs->hcdma,514,db6c5000 */
 	write(base, 0x514, addr);
 	/* 0,&hc_regs->hcchar,500,01081200 */
@@ -500,7 +500,7 @@ static void wr_32(void *base) {
 	read(base, 0x2c, 0x00080100);
 	/* 1,&hc_regs->hctsiz,510,00401000 */
 	write(base, 0x510, 0x00401000);
-	addr = prepare_data();
+	//addr = prepare_data();
 	/* 1,&hc_regs->hcdma,514,d7546000 */
 	write(base, 0x514, addr);
 	/* 0,&hc_regs->hcchar,500,01081200 */
