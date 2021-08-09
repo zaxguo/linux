@@ -71,18 +71,39 @@ static const char dwc_driver_name[] = "dwc_otg";
 
 extern void *usb_base;
 void *dma_ctx;
-void *g_core_if;
+dwc_otg_core_if_t *g_core_if;
 dwc_otg_device_t *g_dev;
 extern void reset_tasklet_func(void *data);
 static void replay_kernel(void *host) {
 	disable_irq(41);
+	printk("start...\n");
+	struct timeval start, end;
+	int us_diff = 0;
 	/*wr_8(host);*/
+	do_gettimeofday(&start);
 	wr_32(host);
+	do_gettimeofday(&end);
+	us_diff = (end.tv_sec - start.tv_sec)*1000000 + (end.tv_usec - start.tv_usec);
+	printk("done... time = %08d\n", us_diff);
 	/*dwc_otg_core_reset(g_core_if);*/
-	reset_tasklet_func(g_dev->hcd);
+	/*reset_tasklet_func(g_dev->hcd);*/
+	/*dwc_otg_ep_clear_stall(g_core_if, g_core_if->ep_xfer_info[2].ep);*/
+#if 0
+	int i;
+	for (i = 2; i < 3; i++) {
+		depctl_data_t data;
+		/*volatile uint32_t *addr = &g_core_if->dev_if->in_ep_regs[i]->diepctl;*/
+		volatile uint32_t *addr = &g_core_if->dev_if->out_ep_regs[i]->doepctl;
+		data.d32 = DWC_READ_REG32(addr);
+		printk("ep[%d] ctl = %08x\n", i, data.d32);
+		data.b.stall = 0;
+		data.b.setd0pid = 1; /* reset data 0 */
+		DWC_WRITE_REG32(addr, data.d32);
+	}
+#endif
+	/*wr_32(host);*/
 	enable_irq(41);
 }
-
 
 static int usb_replay_trigger(struct seq_file *s, void *unused) {
 	void *host = usb_base;
@@ -605,7 +626,7 @@ static irqreturn_t dwc_otg_common_irq(int irq, void *dev)
 
 	/* lwg: all irq entry point */
 	/* irq == 41 */
-	/*printk("irq = %d\n", irq);*/
+	trace_printk("irq = %d\n", irq);
 	retval = dwc_otg_handle_common_intr(dev);
 	if (retval != 0) {
 		S3C2410X_CLEAR_EINTPEND();

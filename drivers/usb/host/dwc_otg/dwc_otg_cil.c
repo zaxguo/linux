@@ -117,7 +117,7 @@ static void init_regmap(void) {
 
 void log_reg_rw(int rw, const char *str, uint32_t off, uint32_t value) {
 	/* do not log, directly return */
-	return;
+	/*return;*/
 #if 0
 	/* look for the code which turns on sof */
 	int i, j;
@@ -2942,7 +2942,8 @@ void dwc_otg_hc_start_transfer(dwc_otg_core_if_t * core_if, dwc_hc_t * hc)
 	trace_printk("	 Xfer Size: %d\n", hctsiz.b.xfersize);
 	trace_printk("	 Num Pkts: %d\n", hctsiz.b.pktcnt);
 	trace_printk("	 Start PID: %d\n", hctsiz.b.pid);
-#endif 
+	trace_printk("	 EP num: %d\n", hc->ep_num);
+#endif
 
 
 	if (core_if->dma_enable) {
@@ -4728,6 +4729,8 @@ void dwc_otg_ep_clear_stall(dwc_otg_core_if_t * core_if, dwc_ep_t * ep)
 	volatile uint32_t *depctl_addr;
 
 	DWC_DEBUGPL(DBG_PCD, "%s ep%d-%s\n", __func__, ep->num,
+		    (ep->is_in ? "IN" : "OUT"));
+	printk(KERN_WARNING, "%s ep%d-%s\n", __func__, ep->num,
 		    (ep->is_in ? "IN" : "OUT"));
 
 	if (ep->is_in == 1) {

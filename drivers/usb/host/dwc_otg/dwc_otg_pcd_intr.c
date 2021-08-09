@@ -1261,6 +1261,7 @@ int32_t dwc_otg_pcd_handle_ep_fetsusp_intr(dwc_otg_pcd_t * pcd)
 	dctl_data_t dctl;
 	dwc_otg_core_if_t *core_if = GET_CORE_IF(pcd);
 	DWC_DEBUGPL(DBG_PCDV, "%s(%p)\n", __func__, core_if);
+	printk("lwg: entered %s for handling fetsusp..\n", __func__);
 
 	/* Clear the global non-periodic IN NAK handshake */
 	dctl.d32 = 0;

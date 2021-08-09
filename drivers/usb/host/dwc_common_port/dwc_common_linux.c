@@ -721,11 +721,13 @@ void DWC_MUTEX_UNLOCK(dwc_mutex_t *mutex)
 
 void DWC_UDELAY(uint32_t usecs)
 {
+	trace_printk("%d us\n", usecs);
 	udelay(usecs);
 }
 
 void DWC_MDELAY(uint32_t msecs)
 {
+	trace_printk("%d ms\n", msecs);
 	mdelay(msecs);
 }
 

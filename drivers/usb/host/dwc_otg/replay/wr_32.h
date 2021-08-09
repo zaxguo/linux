@@ -1,6 +1,6 @@
 #include "common.h"
 static void wr_32(void *base) {
-	dma_addr_t addr;
+	dma_addr_t addr, cmd;
 	/* 0,&hcd->core_if->core_global_regs->gintmsk,18,f3000806 */
 	read(base, 0x18, 0xf3000806);
 	/* 1,&hc_regs->hcint,508,00003fff */
@@ -20,12 +20,13 @@ static void wr_32(void *base) {
 	/* 1,&hcd->core_if->core_global_regs->gintmsk,18,f3000806 */
 	write(base, 0x18, 0xf3000806);
 	/* 0,&global_regs->gnptxsts,2c,00080100 */
+	udelay(10);
 	read(base, 0x2c, 0x00080100);
-	addr = prepare_allow_medium_removal(1);
+	cmd = prepare_allow_medium_removal(1);
 	/* 1,&hc_regs->hctsiz,510,0008001f */
 	write(base, 0x510, 0x0008001f);
 	/* 1,&hc_regs->hcdma,514,f7053000 */
-	write(base, 0x514, addr);
+	write(base, 0x514, cmd);
 	/* 0,&hc_regs->hcchar,500,01081200 */
 	read(base, 0x500, 0x01081200);
 	/* 1,&hc_regs->hcchar,500,81181200 */
@@ -97,12 +98,14 @@ static void wr_32(void *base) {
 	/* 1,&hcd->core_if->core_global_regs->gintmsk,18,f3000806 */
 	write(base, 0x18, 0xf3000806);
 	/* 0,&global_regs->gnptxsts,2c,00080100 */
+	udelay(10);
 	read(base, 0x2c, 0x00080100);
 	/* 1,&hc_regs->hctsiz,510,00080200 */
 	write(base, 0x510, 0x00080200);
-	addr = prepare_csw();
+	//addr = prepare_csw();
+	dump_csw();
 	/* 1,&hc_regs->hcdma,514,f7053000 */
-	write(base, 0x514, addr);
+	write(base, 0x514, cmd);
 	/* 0,&hc_regs->hcchar,500,01089200 */
 	read(base, 0x500, 0x01089200);
 	/* 1,&hc_regs->hcchar,500,81189200 */
@@ -174,12 +177,13 @@ static void wr_32(void *base) {
 	/* 1,&hcd->core_if->core_global_regs->gintmsk,18,f3000806 */
 	write(base, 0x18, 0xf3000806);
 	/* 0,&global_regs->gnptxsts,2c,00080100 */
+	udelay(10);
 	read(base, 0x2c, 0x00080100);
 	/* 1,&hc_regs->hctsiz,510,4008001f */
 	write(base, 0x510, 0x4008001f);
-	addr = prepare_write_10(32);
+	cmd = prepare_write_10(32);
 	/* 1,&hc_regs->hcdma,514,f7053000 */
-	write(base, 0x514, addr);
+	write(base, 0x514, cmd);
 	/* 0,&hc_regs->hcchar,500,01081200 */
 	read(base, 0x500, 0x01081200);
 	/* 1,&hc_regs->hcchar,500,81181200 */
@@ -251,6 +255,7 @@ static void wr_32(void *base) {
 	/* 1,&hcd->core_if->core_global_regs->gintmsk,18,f3000806 */
 	write(base, 0x18, 0xf3000806);
 	/* 0,&global_regs->gnptxsts,2c,00080100 */
+	udelay(10);
 	read(base, 0x2c, 0x00080100);
 	/* 1,&hc_regs->hctsiz,510,00401000 */
 	write(base, 0x510, 0x00401000);
@@ -265,10 +270,15 @@ static void wr_32(void *base) {
 	read(base, 0x18, 0xf3000806);
 	/* 0,&global_regs->gnptxsts,2c,05070100 */
 	read(base, 0x2c, 0x05070100);
+	/* manual delay */
 	/* 0,&hcd->core_if->core_global_regs->gintmsk,18,f3000806 */
 	read(base, 0x18, 0xf3000806);
 	/* 0,&global_regs->gnptxsts,2c,00060000 */
-	read(base, 0x2c, 0x00060000);
+	u32 val;
+	do {
+		val = readl(base + 0x2c);
+	} while(val != 0x00060000);
+	//read(base, 0x2c, 0x00060000);
 	/* 0,&hcd->core_if->core_global_regs->gintmsk,18,f3000806 */
 	read(base, 0x18, 0xf3000806);
 	/* 0,&global_regs->gnptxsts,2c,00070040 */
@@ -334,6 +344,7 @@ static void wr_32(void *base) {
 	/* 1,&hcd->core_if->core_global_regs->gintmsk,18,f3000806 */
 	write(base, 0x18, 0xf3000806);
 	/* 0,&global_regs->gnptxsts,2c,00080100 */
+	udelay(10);
 	read(base, 0x2c, 0x00080100);
 	/* 1,&hc_regs->hctsiz,510,00401000 */
 	write(base, 0x510, 0x00401000);
@@ -409,6 +420,7 @@ static void wr_32(void *base) {
 	/* 1,&hcd->core_if->core_global_regs->gintmsk,18,f3000806 */
 	write(base, 0x18, 0xf3000806);
 	/* 0,&global_regs->gnptxsts,2c,00080100 */
+	udelay(10);
 	read(base, 0x2c, 0x00080100);
 	/* 1,&hc_regs->hctsiz,510,00401000 */
 	write(base, 0x510, 0x00401000);
@@ -484,6 +496,7 @@ static void wr_32(void *base) {
 	/* 1,&hcd->core_if->core_global_regs->gintmsk,18,f3000806 */
 	write(base, 0x18, 0xf3000806);
 	/* 0,&global_regs->gnptxsts,2c,00080100 */
+	udelay(10);
 	read(base, 0x2c, 0x00080100);
 	/* 1,&hc_regs->hctsiz,510,00401000 */
 	write(base, 0x510, 0x00401000);
@@ -565,12 +578,16 @@ static void wr_32(void *base) {
 	/* 1,&hcd->core_if->core_global_regs->gintmsk,18,f3000806 */
 	write(base, 0x18, 0xf3000806);
 	/* 0,&global_regs->gnptxsts,2c,00080100 */
+	udelay(10);
 	read(base, 0x2c, 0x00080100);
 	/* 1,&hc_regs->hctsiz,510,40080200 */
 	write(base, 0x510, 0x40080200);
-	addr = prepare_csw();
+
+	//addr = prepare_csw();
+	dump_csw();
+
 	/* 1,&hc_regs->hcdma,514,f7053000 */
-	write(base, 0x514, addr);
+	write(base, 0x514, cmd);
 	/* 0,&hc_regs->hcchar,500,01089200 */
 	read(base, 0x500, 0x01089200);
 	/* 1,&hc_regs->hcchar,500,81189200 */
@@ -642,12 +659,13 @@ static void wr_32(void *base) {
 	/* 1,&hcd->core_if->core_global_regs->gintmsk,18,f3000806 */
 	write(base, 0x18, 0xf3000806);
 	/* 0,&global_regs->gnptxsts,2c,00080100 */
+	udelay(10);
 	read(base, 0x2c, 0x00080100);
 	/* 1,&hc_regs->hctsiz,510,0008001f */
 	write(base, 0x510, 0x0008001f);
-	addr = prepare_allow_medium_removal(0);
+	cmd = prepare_allow_medium_removal(0);
 	/* 1,&hc_regs->hcdma,514,f7053000 */
-	write(base, 0x514, addr);
+	write(base, 0x514, cmd);
 	/* 0,&hc_regs->hcchar,500,01081200 */
 	read(base, 0x500, 0x01081200);
 	/* 1,&hc_regs->hcchar,500,81181200 */
@@ -719,12 +737,16 @@ static void wr_32(void *base) {
 	/* 1,&hcd->core_if->core_global_regs->gintmsk,18,f3000806 */
 	write(base, 0x18, 0xf3000806);
 	/* 0,&global_regs->gnptxsts,2c,00080100 */
+	udelay(10);
 	read(base, 0x2c, 0x00080100);
 	/* 1,&hc_regs->hctsiz,510,00080200 */
 	write(base, 0x510, 0x00080200);
-	addr = prepare_csw();
+
+	//addr = prepare_csw();
+	dump_csw();
+
 	/* 1,&hc_regs->hcdma,514,f7053000 */
-	write(base, 0x514, addr);
+	write(base, 0x514, cmd);
 	/* 0,&hc_regs->hcchar,500,01089200 */
 	read(base, 0x500, 0x01089200);
 	/* 1,&hc_regs->hcchar,500,81189200 */

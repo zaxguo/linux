@@ -420,14 +420,10 @@ int usb_stor_bulk_transfer_buf(struct us_data *us, unsigned int pipe,
 	/* XXX -- here dd entry point */
 	/*trace_printk("xfer %u bytes\n", length);*/
 	int *seq = (int*)(us->current_urb->transfer_buffer + 1);
-	if (seq > 0x300) {
-		WARN_ON_ONCE(1);
-	}
-	/* dump urb packets */
-#if 0
-	if (length < 1024 && us->current_urb->transfer_buffer != NULL) {
-		trace_printk("xfer %u bytes @ %08x\n", length, us->current_urb->transfer_dma);
-		print_hex_dump(KERN_WARNING, "urb data:", DUMP_PREFIX_OFFSET, 16, 4,  us->current_urb->transfer_buffer, length, 1);
+#if 1
+	if (length < 1024 && us->current_urb->transfer_buffer != NULL && act_len) {
+		trace_printk("csw before xfer %u (%u) bytes @ %08x\n", length, *act_len, us->current_urb->transfer_dma);
+		print_hex_dump(KERN_WARNING, "urb data:", DUMP_PREFIX_OFFSET, 16, 4,  us->current_urb->transfer_buffer, length*2, 1);
 	}
 #endif
 
@@ -435,6 +431,13 @@ int usb_stor_bulk_transfer_buf(struct us_data *us, unsigned int pipe,
 	usb_fill_bulk_urb(us->current_urb, us->pusb_dev, pipe, buf, length,
 		      usb_stor_blocking_completion, NULL);
 	result = usb_stor_msg_common(us, 0);
+	/* dump urb packets */
+#if 1
+	if (length < 1024 && us->current_urb->transfer_buffer != NULL && act_len) {
+		trace_printk("csw after xfer %u (%u) bytes @ %08x\n", length, *act_len, us->current_urb->transfer_dma);
+		print_hex_dump(KERN_WARNING, "urb data:", DUMP_PREFIX_OFFSET, 16, 4,  us->current_urb->transfer_buffer, length*2, 1);
+	}
+#endif
 
 	/* store the actual length of the data transferred */
 	if (act_len)
@@ -1266,7 +1269,6 @@ int usb_stor_Bulk_transport(struct scsi_cmnd *srb, struct us_data *us)
 	/*trace_printk("Attempting to get CSW...\n");*/
 	result = usb_stor_bulk_transfer_buf(us, us->recv_bulk_pipe,
 				bcs, US_BULK_CS_WRAP_LEN, &cswlen);
-
 	/*
 	 * Some broken devices add unnecessary zero-length packets to the
 	 * end of their data transfers.  Such packets show up as 0-length
