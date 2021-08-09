@@ -265,7 +265,8 @@ static void wr_32(void *base) {
 	udelay(10);
 	/* 0,&global_regs->gnptxsts,2c,05070100 : 172 */
 	read(base, 0x2c, 0x05070100);
-	poll_bit_with_max_tries(base + 0x2c, 24, 2000);
+	//poll_bit_with_max_tries(base + 0x2c, 24, 2000);
+	poll_less_than_with_max_tries(base + 0x2c, 0x00080100, 2000);
 	/* 0,&hcd->core_if->core_global_regs->gintmsk,18,f3000806 : 173 */
 	read(base, 0x18, 0xf3000806);
 	udelay(10);
