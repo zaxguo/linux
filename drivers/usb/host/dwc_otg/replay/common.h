@@ -37,7 +37,7 @@ static dma_addr_t prepare_csw(void) {
 static dma_addr_t prepare_data(void) {
 	dma_addr_t addr;
 	void *virt = dma_zalloc_coherent(dma_ctx, 4096, &addr, GFP_KERNEL);
-	memset(virt, toggle, 4096);
+	memset(virt, 0xee, 4096);
 	//printk("setting data page to %02x\n", toggle);
 	return addr;
 }
@@ -51,8 +51,11 @@ static dma_addr_t prepare_write_10(uint8_t len) {
 	/* tag */
 	*(word + 1) = tag_cnt++;
 	*(word + 2) = 0x00001000;
-	if (len == 32)
+	if (len == 32) {
 		*(word + 2) = 0x00004000;
+	} else if(len == 128) {
+		*(word + 2) = 0x00010000;
+	}
 	*(word + 3) = 0x2a0a0000;
 	/* # of sectors */
 	*(uint8_t *)(virt + 0x17) = len;
@@ -82,13 +85,13 @@ static void poll_for_irq(void *host) {
 	} while((val &= 0x02000000) == 0);
 }
 
-static void poll_with_max_tries(void *addr, int val, int tries) {
+static void poll_bit_with_max_tries(void *addr, int bit, int tries) {
 	int ret = 0;
 	int i = tries;
 	do {
 		ret = readl(addr);
 		udelay(1);
-	} while((--tries) && (ret != val));
+	} while((--tries) && ((ret &= (1 << bit)) == 0));
 }
 
 /* assuming a fixed ep number 2 */
@@ -96,23 +99,29 @@ static void reset_ep(void) {
 
 }
 
-static inline void read(void *base, u32 off, u32 expect) {
+static inline void _read(void *base, u32 off, u32 expect, int line) {
 	u32 val = readl(base + off);
 	if (expect != IGNORE && val != expect) {
 		//printk("divergence@off[0x%x]!! %08x != %08x\n", off, val, expect);
 #if 1
+		/* gnptxsts */
+		if (off == 0x2c) {
+			trace_printk("divergence@off[0x%x:%d]!! %08x != %08x\n", off, line, val, expect);
+		}
 		/* only care about xsac error bit on */
 		if (off == 0x508 && (val & (1 << 7))) {
-			printk("divergence@off[0x%x]!! %08x != %08x\n", off, val, expect);
+			printk("divergence@off[0x%x:%d]!! %08x != %08x\n", off, line, val, expect);
 		}
 #endif
 	}
 }
 
+
 static inline void write(void *base, u32 off, u32 val) {
 	//printk("writing %08x to off %08x\n", val, off);
 	writel(val, base + off);
 }
+#define read(b, o, v) _read((b), (o), (v), __LINE__)
 
 #endif __COMMON_REPLAY_H
 

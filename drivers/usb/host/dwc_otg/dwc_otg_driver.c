@@ -60,6 +60,8 @@
 #include <linux/proc_fs.h>
 #include "replay/wr_8.h"
 #include "replay/wr_32.h"
+#include "replay/wr_128.h"
+#include "replay/wr_256.h"
 
 
 #define DWC_DRIVER_VERSION	"3.00a 10-AUG-2012"
@@ -76,21 +78,9 @@ dwc_otg_device_t *g_dev;
 extern void reset_tasklet_func(void *data);
 static void replay_kernel(void *host) {
 	disable_irq(41);
-	printk("start...\n");
-	struct timeval start, end;
-	int us_diff = 0;
-	/*wr_8(host);*/
-	do_gettimeofday(&start);
-	wr_32(host);
-	do_gettimeofday(&end);
-	us_diff = (end.tv_sec - start.tv_sec)*1000000 + (end.tv_usec - start.tv_usec);
-	printk("done... time = %08d\n", us_diff);
-	/*dwc_otg_core_reset(g_core_if);*/
-	/*reset_tasklet_func(g_dev->hcd);*/
-	/*dwc_otg_ep_clear_stall(g_core_if, g_core_if->ep_xfer_info[2].ep);*/
-#if 0
+#if 1
 	int i;
-	for (i = 2; i < 3; i++) {
+	for (i = 0; i < 1; i++) {
 		depctl_data_t data;
 		/*volatile uint32_t *addr = &g_core_if->dev_if->in_ep_regs[i]->diepctl;*/
 		volatile uint32_t *addr = &g_core_if->dev_if->out_ep_regs[i]->doepctl;
@@ -99,8 +89,23 @@ static void replay_kernel(void *host) {
 		data.b.stall = 0;
 		data.b.setd0pid = 1; /* reset data 0 */
 		DWC_WRITE_REG32(addr, data.d32);
+		udelay(10);
 	}
 #endif
+	printk("start...\n");
+	struct timeval start, end;
+	int us_diff = 0;
+	/*wr_8(host);*/
+	do_gettimeofday(&start);
+	/*wr_32(host);*/
+	/*wr_128(host);*/
+	wr_256(host);
+	do_gettimeofday(&end);
+	us_diff = (end.tv_sec - start.tv_sec)*1000000 + (end.tv_usec - start.tv_usec);
+	printk("done... time = %08d\n", us_diff);
+	/*dwc_otg_core_reset(g_core_if);*/
+	/*reset_tasklet_func(g_dev->hcd);*/
+	/*dwc_otg_ep_clear_stall(g_core_if, g_core_if->ep_xfer_info[2].ep);*/
 	/*wr_32(host);*/
 	enable_irq(41);
 }
