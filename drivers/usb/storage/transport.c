@@ -210,9 +210,11 @@ int usb_stor_control_msg(struct us_data *us, unsigned int pipe,
 	usb_stor_dbg(us, "rq=%02x rqtype=%02x value=%04x index=%02x len=%u\n",
 		     request, requesttype, value, index, size);
 
+#if 0
 	/* XX lwg XXX */
 	trace_printk("rq=%02x rqtype=%02x value=%04x index=%02x len=%u\n",
 		     request, requesttype, value, index, size);
+#endif 
 
 
 	/* fill in the devrequest structure */
@@ -420,7 +422,7 @@ int usb_stor_bulk_transfer_buf(struct us_data *us, unsigned int pipe,
 	/* XXX -- here dd entry point */
 	/*trace_printk("xfer %u bytes\n", length);*/
 	int *seq = (int*)(us->current_urb->transfer_buffer + 1);
-#if 1
+#if 0
 	if (length < 1024 && us->current_urb->transfer_buffer != NULL && act_len) {
 		trace_printk("csw before xfer %u (%u) bytes @ %08x\n", length, *act_len, us->current_urb->transfer_dma);
 		print_hex_dump(KERN_WARNING, "urb data:", DUMP_PREFIX_OFFSET, 16, 4,  us->current_urb->transfer_buffer, length*2, 1);
@@ -432,7 +434,7 @@ int usb_stor_bulk_transfer_buf(struct us_data *us, unsigned int pipe,
 		      usb_stor_blocking_completion, NULL);
 	result = usb_stor_msg_common(us, 0);
 	/* dump urb packets */
-#if 1
+#if 0
 	if (length < 1024 && us->current_urb->transfer_buffer != NULL && act_len) {
 		trace_printk("csw after xfer %u (%u) bytes @ %08x\n", length, *act_len, us->current_urb->transfer_dma);
 		print_hex_dump(KERN_WARNING, "urb data:", DUMP_PREFIX_OFFSET, 16, 4,  us->current_urb->transfer_buffer, length*2, 1);

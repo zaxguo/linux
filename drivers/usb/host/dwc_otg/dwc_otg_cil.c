@@ -117,7 +117,7 @@ static void init_regmap(void) {
 
 void log_reg_rw(int rw, const char *str, uint32_t off, uint32_t value) {
 	/* do not log, directly return */
-	/*return;*/
+	return;
 #if 0
 	/* look for the code which turns on sof */
 	int i, j;
@@ -467,8 +467,6 @@ static void dwc_otg_enable_common_interrupts(dwc_otg_core_if_t * core_if)
 		intr_mask.b.rxstsqlvl = 1;
 	}
 
-	/* lwg: write 1 to disable intr */
-	/*intr_mask.b.sofintr = 1;*/
 
 	intr_mask.b.conidstschng = 1;
 	intr_mask.b.wkupintr = 1;
@@ -2135,7 +2133,6 @@ void dwc_otg_disable_host_interrupts(dwc_otg_core_if_t * core_if)
 	/* lwg: set to 1 = irq off */
 
 	/*intr_mask.b.sofintr = 0;*/
-
 	intr_mask.b.sofintr = 1;
 	intr_mask.b.portintr = 1;
 	/* lwg: disable host mode irq */

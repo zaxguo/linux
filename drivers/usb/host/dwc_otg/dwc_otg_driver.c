@@ -58,14 +58,14 @@
 #include "dwc_otg_hcd_if.h"
 #include "dwc_otg_fiq_fsm.h"
 #include <linux/proc_fs.h>
-#include "replay/wr_8.h"
-#include "replay/wr_32_2.h"
-#include "replay/wr_128.h"
-#include "replay/wr_256.h"
+/*#include "replay/wr_8.h"*/
+/*#include "replay/wr_32_2.h"*/
+/*#include "replay/wr_128.h"*/
+/*#include "replay/wr_256.h"*/
 #include "replay/rd_8.h"
-#include "replay/rd_32.h"
-#include "replay/rd_128.h"
-#include "replay/rd_256.h"
+/*#include "replay/rd_32.h"*/
+/*#include "replay/rd_128.h"*/
+/*#include "replay/rd_256.h"*/
 
 #define DWC_DRIVER_VERSION	"3.00a 10-AUG-2012"
 #define DWC_DRIVER_DESC		"HS OTG USB Controller driver"
@@ -102,12 +102,12 @@ static void replay_kernel(void *host) {
 	struct timeval start, end;
 	int us_diff = 0;
 	do_gettimeofday(&start);
-	/*rd_8(host);*/
+	rd_8(host);
 	/*rd_32(host);*/
 	/*rd_128(host);*/
 	/*rd_256(host);*/
 	/*wr_8(host);*/
-	wr_32(host);
+	/*wr_32(host);*/
 	/*wr_128(host);*/
 	/*wr_256(host);*/
 	do_gettimeofday(&end);

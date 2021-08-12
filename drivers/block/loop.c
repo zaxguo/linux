@@ -343,7 +343,7 @@ static btt_e get_disk_blk(int dev_id, btt_e sector, struct page *pg, int req_op,
 
 	/* -----------lwg: the following is 'emulated' disk ops in tz ------------
 	 * -----------     it is considered to be part of our TCB  --------------*/
-	/*lwg("get res = %ld, %lx, %lx, %lx\n", res.a0, res.a1, res.a2, res.a3);*/
+	lwg("get res = %ld, %lx, %lx, %lx\n", res.a0, res.a1, res.a2, res.a3);
 
 #if 0
 	/* some debugging */
@@ -2467,7 +2467,7 @@ static int __init loop_init(void)
 	printk(KERN_INFO "loop: module loaded, max_loop = %d\n", max_loop);
 
 	// lwg: one-time init of enigma loop cb -- turn off for strawman approach
-	/*init_enigma_cb();*/
+	init_enigma_cb();
 	printk("BTT disabled!!\n");
 	/*check_armtf();*/
 	return 0;

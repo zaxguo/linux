@@ -1512,10 +1512,12 @@ int usb_hcd_map_urb_for_dma(struct usb_hcd *hcd, struct urb *urb,
 	enum dma_data_direction dir;
 	int ret = 0;
 	/*trace_printk("entered, buffer length = %d\n", urb->transfer_buffer_length);*/
-
+#if 0
+	/* lwg  */
 	if (urb->transfer_buffer_length == 4096) {
 		WARN_ON_ONCE(1);
 	}
+#endif 
 
 	/* Map the URB's buffers for DMA access.
 	 * Lower level HCD code should use *_dma exclusively,
