@@ -343,7 +343,7 @@ static btt_e get_disk_blk(int dev_id, btt_e sector, struct page *pg, int req_op,
 
 	/* -----------lwg: the following is 'emulated' disk ops in tz ------------
 	 * -----------     it is considered to be part of our TCB  --------------*/
-	lwg("get res = %ld, %lx, %lx, %lx\n", res.a0, res.a1, res.a2, res.a3);
+	/*lwg("get res = %ld, %lx, %lx, %lx\n", res.a0, res.a1, res.a2, res.a3);*/
 
 #if 0
 	/* some debugging */
@@ -2345,7 +2345,7 @@ static int enigma_dbg_show(struct seq_file *s, void *unused) {
 	printk("filedata read: %ld, write: %ld\n", filedata_read, filedata_write);
 	printk("metadata read: %ld, write: %ld\n", metadata_read, metadata_write);
 	printk("TEE replay temporarily turned off in case overwriting MMC!!!!\n");
-	/*int cnt = enigma_dump_emu_disk(0);*/
+	int cnt = enigma_dump_emu_disk(0);
 	/*encrypt_btt(0);*/
 	return 0;
 

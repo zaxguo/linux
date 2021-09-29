@@ -346,6 +346,7 @@ EXPORT_SYMBOL_GPL(usb_ep_set_halt);
  * Note that some hardware can't support this request (like pxa2xx_udc),
  * and accordingly can't correctly implement interface altsettings.
  */
+/* lwg; is this resetting working??? */
 int usb_ep_clear_halt(struct usb_ep *ep)
 {
 	int ret;

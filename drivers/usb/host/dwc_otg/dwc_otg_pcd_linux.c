@@ -438,6 +438,7 @@ static int ep_dequeue(struct usb_ep *usb_ep, struct usb_request *usb_req)
  *	- 2 means clear stall lock flag.
  *	- 3 means set  stall lock flag.
  */
+/* lwg: look further */
 static int ep_halt(struct usb_ep *usb_ep, int value)
 {
 	int retval = 0;

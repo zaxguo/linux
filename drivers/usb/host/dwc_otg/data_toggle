@@ -1,0 +1,313 @@
+dwc_otg_hcd.h:	DWC_CIRCLEQ_REMOVE(&qh->qtd_list, qtd, qtd_list_entry);
+dwc_otg_hcd.h:	qtd = list_entry(_qh->qtd_list.next, dwc_otg_qtd_t, qtd_list_entry); \
+dwc_otg_hcd.h:	if (usb_pipeint(qtd->urb->pipe) && _qh->start_split_frame != 0 && !qtd->complete_split) { \
+dwc_otg_hcd_ddma.c:	return (((qh->ep_type == UE_ISOCHRONOUS)
+dwc_otg_hcd_ddma.c:		 && (qh->dev_speed == DWC_OTG_EP_SPEED_HIGH))
+dwc_otg_hcd_ddma.c:	return ((qh->dev_speed == DWC_OTG_EP_SPEED_HIGH)
+dwc_otg_hcd_ddma.c:		? ((qh->interval + 8 - 1) / 8)
+dwc_otg_hcd_ddma.c:		: qh->interval);
+dwc_otg_hcd_ddma.c:	qh->desc_list = (dwc_otg_host_dma_desc_t *)
+dwc_otg_hcd_ddma.c:			  &qh->desc_list_dma);
+dwc_otg_hcd_ddma.c:	if (!qh->desc_list) {
+dwc_otg_hcd_ddma.c:	dwc_memset(qh->desc_list, 0x00,
+dwc_otg_hcd_ddma.c:	qh->n_bytes =
+dwc_otg_hcd_ddma.c:	if (!qh->n_bytes) {
+dwc_otg_hcd_ddma.c:	if (qh->desc_list) {
+dwc_otg_hcd_ddma.c:		DWC_DMA_FREE(dev, max_desc_num(qh), qh->desc_list,
+dwc_otg_hcd_ddma.c:			     qh->desc_list_dma);
+dwc_otg_hcd_ddma.c:		qh->desc_list = NULL;
+dwc_otg_hcd_ddma.c:	if (qh->n_bytes) {
+dwc_otg_hcd_ddma.c:		DWC_FREE(qh->n_bytes);
+dwc_otg_hcd_ddma.c:		qh->n_bytes = NULL;
+dwc_otg_hcd_ddma.c:	if (!qh->channel) {
+dwc_otg_hcd_ddma.c:		DWC_ERROR("qh->channel = %p", qh->channel);
+dwc_otg_hcd_ddma.c:	hc = qh->channel;
+dwc_otg_hcd_ddma.c:	if (qh->ep_type == UE_ISOCHRONOUS)
+dwc_otg_hcd_ddma.c:		i = frame_list_idx(qh->sched_frame);
+dwc_otg_hcd_ddma.c:	if (qh->channel->speed == DWC_OTG_EP_SPEED_HIGH) {
+dwc_otg_hcd_ddma.c:		inc = (8 + qh->interval - 1) / qh->interval;
+dwc_otg_hcd_ddma.c:			j = j << qh->interval;
+dwc_otg_hcd_ddma.c:	dwc_hc_t *hc = qh->channel;
+dwc_otg_hcd_ddma.c:	qh->channel = NULL;
+dwc_otg_hcd_ddma.c:	qh->ntd = 0;
+dwc_otg_hcd_ddma.c:	if (qh->desc_list) {
+dwc_otg_hcd_ddma.c:		dwc_memset(qh->desc_list, 0x00,
+dwc_otg_hcd_ddma.c:	if (qh->do_split) {
+dwc_otg_hcd_ddma.c:	    && (qh->ep_type == UE_ISOCHRONOUS || qh->ep_type == UE_INTERRUPT)) {
+dwc_otg_hcd_ddma.c:	qh->ntd = 0;
+dwc_otg_hcd_ddma.c:	if (qh->channel)
+dwc_otg_hcd_ddma.c:	if ((qh->ep_type == UE_ISOCHRONOUS || qh->ep_type == UE_INTERRUPT)
+dwc_otg_hcd_ddma.c:	if (qh->dev_speed == DWC_OTG_EP_SPEED_HIGH) {
+dwc_otg_hcd_ddma.c:	if (qh->dev_speed == DWC_OTG_EP_SPEED_HIGH) {
+dwc_otg_hcd_ddma.c:	 * released when no more QTDs in the list(qh->ntd == 0).
+dwc_otg_hcd_ddma.c:	 * Thus this function is called only when qh->ntd == 0 and qh->channel == 0.
+dwc_otg_hcd_ddma.c:	 * So qh->channel != NULL branch is not used and just not removed from the
+dwc_otg_hcd_ddma.c:	if (qh->channel) {
+dwc_otg_hcd_ddma.c:		    (MAX_FRLIST_EN_NUM + frame_list_idx(qh->sched_frame) -
+dwc_otg_hcd_ddma.c:		qh->sched_frame = calc_starting_frame(hcd, qh, &skip_frames);
+dwc_otg_hcd_ddma.c:		fr_idx = frame_list_idx(qh->sched_frame);
+dwc_otg_hcd_ddma.c:	qh->td_first = qh->td_last = frame_to_desc_idx(qh, fr_idx);
+dwc_otg_hcd_ddma.c:	idx = qh->td_last;
+dwc_otg_hcd_ddma.c:	inc = qh->interval;
+dwc_otg_hcd_ddma.c:	ntd_max = (max_desc_num(qh) + qh->interval - 1) / qh->interval;
+dwc_otg_hcd_ddma.c:	if (skip_frames && !qh->channel)
+dwc_otg_hcd_ddma.c:		ntd_max = ntd_max - skip_frames / qh->interval;
+dwc_otg_hcd_ddma.c:	    (qh->dev_speed ==
+dwc_otg_hcd_ddma.c:	DWC_CIRCLEQ_FOREACH(qtd, &qh->qtd_list, qtd_list_entry) {
+dwc_otg_hcd_ddma.c:		while ((qh->ntd < ntd_max)
+dwc_otg_hcd_ddma.c:			dma_desc = &qh->desc_list[idx];
+dwc_otg_hcd_ddma.c:				qh->n_bytes[idx] = max_xfer_size;
+dwc_otg_hcd_ddma.c:				qh->n_bytes[idx] = frame_desc->length;
+dwc_otg_hcd_ddma.c:			dma_desc->status.b_isoc.n_bytes = qh->n_bytes[idx];
+dwc_otg_hcd_ddma.c:			qh->ntd++;
+dwc_otg_hcd_ddma.c:			idx = desclist_idx_inc(idx, inc, qh->dev_speed);
+dwc_otg_hcd_ddma.c:	qh->td_last = idx;
+dwc_otg_hcd_ddma.c:	if (qh->ntd == ntd_max) {
+dwc_otg_hcd_ddma.c:		idx = desclist_idx_dec(qh->td_last, inc, qh->dev_speed);
+dwc_otg_hcd_ddma.c:		qh->desc_list[idx].status.b_isoc.ioc = 1;
+dwc_otg_hcd_ddma.c:		idx = dwc_desclist_idx_dec(idx, inc * ((qh->ntd + 1) / 2), qh->dev_speed);
+dwc_otg_hcd_ddma.c:		idx = dwc_desclist_idx_dec(qh->td_last, inc, qh->dev_speed);
+dwc_otg_hcd_ddma.c:	qh->desc_list[idx].status.b_isoc.ioc = 1;
+dwc_otg_hcd_ddma.c:	hc = qh->channel;
+dwc_otg_hcd_ddma.c:	DWC_CIRCLEQ_FOREACH(qtd, &qh->qtd_list, qtd_list_entry) {
+dwc_otg_hcd_ddma.c:			dma_desc = &qh->desc_list[n_desc];
+dwc_otg_hcd_ddma.c:			qh->n_bytes[n_desc] = len;
+dwc_otg_hcd_ddma.c:			if ((qh->ep_type == UE_CONTROL)
+dwc_otg_hcd_ddma.c:		if (qh->ep_type == UE_CONTROL)
+dwc_otg_hcd_ddma.c:		qh->desc_list[n_desc - 1].status.b.ioc = 1;
+dwc_otg_hcd_ddma.c:		qh->desc_list[n_desc - 1].status.b.eol = 1;
+dwc_otg_hcd_ddma.c:	dwc_hc_t *hc = qh->channel;
+dwc_otg_hcd_ddma.c:		if (!qh->ntd)
+dwc_otg_hcd_ddma.c:	idx = qh->td_first;
+dwc_otg_hcd_ddma.c:		DWC_CIRCLEQ_FOREACH_SAFE(qtd, qtd_tmp, &hc->qh->qtd_list, qtd_list_entry)
+dwc_otg_hcd_ddma.c:		DWC_CIRCLEQ_FOREACH_SAFE(qtd, qtd_tmp, &hc->qh->qtd_list, qtd_list_entry) {
+dwc_otg_hcd_ddma.c:	DWC_CIRCLEQ_FOREACH_SAFE(qtd, qtd_tmp, &hc->qh->qtd_list, qtd_list_entry) {
+dwc_otg_hcd_ddma.c:			dma_desc = &qh->desc_list[idx];
+dwc_otg_hcd_ddma.c:				frame_desc->actual_length = qh->n_bytes[idx] - remain;
+dwc_otg_hcd_ddma.c:				frame_desc->actual_length = qh->n_bytes[idx] - remain;
+dwc_otg_hcd_ddma.c:			qh->ntd--;
+dwc_otg_hcd_ddma.c:				idx = desclist_idx_inc(idx, qh->interval, hc->speed);
+dwc_otg_hcd_ddma.c:			idx = desclist_idx_inc(idx, qh->interval, hc->speed);
+dwc_otg_hcd_ddma.c:		while (idx != qh->td_first);
+dwc_otg_hcd_ddma.c:	qh->td_first = idx;
+dwc_otg_hcd_ddma.c:		DWC_CIRCLEQ_FOREACH_SAFE(qtd, qtd_tmp, &hc->qh->qtd_list, qtd_list_entry) {
+dwc_otg_hcd_ddma.c:	DWC_CIRCLEQ_FOREACH_SAFE(qtd, qtd_tmp, &qh->qtd_list, qtd_list_entry) {
+dwc_otg_hcd_ddma.c:			dma_desc = &qh->desc_list[n_desc];
+dwc_otg_hcd_ddma.c:			n_bytes = qh->n_bytes[n_desc];
+dwc_otg_hcd_ddma.c:			} else if (qh->ep_type == UE_CONTROL) {
+dwc_otg_hcd_ddma.c:	if (qh->ep_type != UE_CONTROL) {
+dwc_otg_hcd_ddma.c:			qh->data_toggle = DWC_OTG_HC_PID_DATA0;
+dwc_otg_hcd_ddma.c:			qh->ping_state = 1;
+dwc_otg_hcd_ddma.c:		    DWC_CIRCLEQ_EMPTY(&qh->qtd_list)) {
+dwc_otg_hcd_ddma.c:					   &qh->qh_list_entry);
+dwc_otg_hcd_ddma.c:		if (!DWC_CIRCLEQ_EMPTY(&qh->qtd_list)) {
+dwc_otg_hcd_queue.c:	DWC_CIRCLEQ_FOREACH_SAFE(qtd, qtd_tmp, &qh->qtd_list, qtd_list_entry) {
+dwc_otg_hcd_queue.c:		DWC_CIRCLEQ_REMOVE(&qh->qtd_list, qtd, qtd_list_entry);
+dwc_otg_hcd_queue.c:	} else if (qh->dw_align_buf) {
+dwc_otg_hcd_queue.c:		if (qh->ep_type == UE_ISOCHRONOUS) {
+dwc_otg_hcd_queue.c:		align_buf_virt = qh->dw_align_buf;
+dwc_otg_hcd_queue.c:		align_buf_dma = qh->dw_align_buf_dma;
+dwc_otg_hcd_queue.c:	qh->ep_type = dwc_otg_hcd_get_pipe_type(&urb->pipe_info);
+dwc_otg_hcd_queue.c:	qh->ep_is_in = dwc_otg_hcd_is_pipe_in(&urb->pipe_info) ? 1 : 0;
+dwc_otg_hcd_queue.c:	qh->data_toggle = DWC_OTG_HC_PID_DATA0;
+dwc_otg_hcd_queue.c:	qh->maxp = dwc_otg_hcd_get_mps(&urb->pipe_info);
+dwc_otg_hcd_queue.c:	DWC_CIRCLEQ_INIT(&qh->qtd_list);
+dwc_otg_hcd_queue.c:	DWC_LIST_INIT(&qh->qh_list_entry);
+dwc_otg_hcd_queue.c:	qh->channel = NULL;
+dwc_otg_hcd_queue.c:	qh->do_split = 0;
+dwc_otg_hcd_queue.c:		qh->speed = dev_speed;
+dwc_otg_hcd_queue.c:	qh->nak_frame = 0xffff;
+dwc_otg_hcd_queue.c:		qh->do_split = 1;
+dwc_otg_hcd_queue.c:		qh->skip_count = 0;
+dwc_otg_hcd_queue.c:	if (qh->ep_type == UE_INTERRUPT || qh->ep_type == UE_ISOCHRONOUS) {
+dwc_otg_hcd_queue.c:		    dwc_hb_mult(qh->maxp) * dwc_max_packet(qh->maxp);
+dwc_otg_hcd_queue.c:		qh->usecs =
+dwc_otg_hcd_queue.c:		    calc_bus_time((qh->do_split ? USB_SPEED_HIGH : dev_speed),
+dwc_otg_hcd_queue.c:				  qh->ep_is_in, (qh->ep_type == UE_ISOCHRONOUS),
+dwc_otg_hcd_queue.c:		qh->sched_frame = dwc_frame_num_inc(hcd->frame_number,
+dwc_otg_hcd_queue.c:		qh->interval = urb->interval;
+dwc_otg_hcd_queue.c:				qh->interval *= 8;
+dwc_otg_hcd_queue.c:				qh->sched_frame |= 0x7;
+dwc_otg_hcd_queue.c:				qh->start_split_frame = qh->sched_frame;
+dwc_otg_hcd_queue.c:					qh->interval < int_ep_interval_min &&
+dwc_otg_hcd_queue.c:					qh->ep_type == UE_INTERRUPT) {
+dwc_otg_hcd_queue.c:				qh->interval = int_ep_interval_min;
+dwc_otg_hcd_queue.c:		qh->dev_speed = DWC_OTG_EP_SPEED_LOW;
+dwc_otg_hcd_queue.c:		qh->dev_speed = DWC_OTG_EP_SPEED_FULL;
+dwc_otg_hcd_queue.c:		qh->dev_speed = DWC_OTG_EP_SPEED_HIGH;
+dwc_otg_hcd_queue.c:	switch (qh->ep_type) {
+dwc_otg_hcd_queue.c:	if (qh->ep_type == UE_INTERRUPT) {
+dwc_otg_hcd_queue.c:			    qh->usecs);
+dwc_otg_hcd_queue.c:			    qh->interval);
+dwc_otg_hcd_queue.c:	if ((qh->dev_speed == DWC_OTG_EP_SPEED_HIGH) || qh->do_split) {
+dwc_otg_hcd_queue.c:		max_claimed_usecs = 100 - qh->usecs;
+dwc_otg_hcd_queue.c:		max_claimed_usecs = 900 - qh->usecs;
+dwc_otg_hcd_queue.c:		DWC_INFO("%s: already claimed usecs %d, required usecs %d\n", __func__, hcd->periodic_usecs, qh->usecs);	//NOTICE
+dwc_otg_hcd_queue.c: * keep each qh use in qh->frame_usecs
+dwc_otg_hcd_queue.c:	utime = _qh->usecs;
+dwc_otg_hcd_queue.c:			_qh->frame_usecs[i] += utime;
+dwc_otg_hcd_queue.c:	utime = _qh->usecs;
+dwc_otg_hcd_queue.c:					_qh->frame_usecs[j] += _hcd->frame_usecs[j] + t_left;
+dwc_otg_hcd_queue.c:					_qh->frame_usecs[j] += _hcd->frame_usecs[j];
+dwc_otg_hcd_queue.c:	if (_qh->speed == USB_SPEED_HIGH ||
+dwc_otg_hcd_queue.c:	max_xfer_size = dwc_max_packet(qh->maxp) * dwc_hb_mult(qh->maxp);
+dwc_otg_hcd_queue.c:			qh->sched_frame &= ~0x7;
+dwc_otg_hcd_queue.c:			qh->sched_frame |= (frame & 7);
+dwc_otg_hcd_queue.c:		DWC_LIST_INSERT_TAIL(&hcd->periodic_sched_ready, &qh->qh_list_entry);
+dwc_otg_hcd_queue.c:		if(fiq_enable && (DWC_LIST_EMPTY(&hcd->periodic_sched_inactive) || dwc_frame_num_le(qh->sched_frame, hcd->fiq_state->next_sched_frame)))
+dwc_otg_hcd_queue.c:			hcd->fiq_state->next_sched_frame = qh->sched_frame;
+dwc_otg_hcd_queue.c:		DWC_LIST_INSERT_TAIL(&hcd->periodic_sched_inactive, &qh->qh_list_entry);
+dwc_otg_hcd_queue.c:	hcd->periodic_usecs += qh->usecs;
+dwc_otg_hcd_queue.c:	if (!DWC_LIST_EMPTY(&qh->qh_list_entry)) {
+dwc_otg_hcd_queue.c:				     &qh->qh_list_entry);
+dwc_otg_hcd_queue.c:	DWC_LIST_REMOVE_INIT(&qh->qh_list_entry);
+dwc_otg_hcd_queue.c:	hcd->periodic_usecs -= qh->usecs;
+dwc_otg_hcd_queue.c:			hcd->frame_usecs[i] += qh->frame_usecs[i];
+dwc_otg_hcd_queue.c:			qh->frame_usecs[i] = 0;
+dwc_otg_hcd_queue.c:	if (DWC_LIST_EMPTY(&qh->qh_list_entry)) {
+dwc_otg_hcd_queue.c:		if (hcd->non_periodic_qh_ptr == &qh->qh_list_entry) {
+dwc_otg_hcd_queue.c:		DWC_LIST_REMOVE_INIT(&qh->qh_list_entry);
+dwc_otg_hcd_queue.c:		if (!DWC_CIRCLEQ_EMPTY(&qh->qtd_list)) {
+dwc_otg_hcd_queue.c:			if(nak_holdoff && qh->do_split) {
+dwc_otg_hcd_queue.c:				qh->nak_frame = 0xFFFF;
+dwc_otg_hcd_queue.c:		if (qh->do_split) {
+dwc_otg_hcd_queue.c:				qh->sched_frame = frame_number;
+dwc_otg_hcd_queue.c:						     (qh->start_split_frame,
+dwc_otg_hcd_queue.c:					if ((qh->ep_type != UE_ISOCHRONOUS) ||
+dwc_otg_hcd_queue.c:					    (qh->ep_is_in != 0)) {
+dwc_otg_hcd_queue.c:						qh->sched_frame =
+dwc_otg_hcd_queue.c:						    dwc_frame_num_inc(qh->sched_frame, 1);
+dwc_otg_hcd_queue.c:				qh->sched_frame =
+dwc_otg_hcd_queue.c:				    dwc_frame_num_inc(qh->start_split_frame,
+dwc_otg_hcd_queue.c:						      qh->interval);
+dwc_otg_hcd_queue.c:				    (qh->sched_frame, frame_number)) {
+dwc_otg_hcd_queue.c:					qh->sched_frame = frame_number;
+dwc_otg_hcd_queue.c:				qh->sched_frame |= 0x7;
+dwc_otg_hcd_queue.c:				qh->start_split_frame = qh->sched_frame;
+dwc_otg_hcd_queue.c:			qh->sched_frame =
+dwc_otg_hcd_queue.c:			    dwc_frame_num_inc(qh->sched_frame, qh->interval);
+dwc_otg_hcd_queue.c:			if (dwc_frame_num_le(qh->sched_frame, frame_number)) {
+dwc_otg_hcd_queue.c:				qh->sched_frame = frame_number;
+dwc_otg_hcd_queue.c:		if (DWC_CIRCLEQ_EMPTY(&qh->qtd_list)) {
+dwc_otg_hcd_queue.c:			if ((microframe_schedule && dwc_frame_num_le(qh->sched_frame, frame_number)) ||
+dwc_otg_hcd_queue.c:			(!microframe_schedule && qh->sched_frame == frame_number)) {
+dwc_otg_hcd_queue.c:						   &qh->qh_list_entry);
+dwc_otg_hcd_queue.c:				if(fiq_enable && !dwc_frame_num_le(hcd->fiq_state->next_sched_frame, qh->sched_frame))
+dwc_otg_hcd_queue.c:					hcd->fiq_state->next_sched_frame = qh->sched_frame;
+dwc_otg_hcd_queue.c:				     &qh->qh_list_entry);
+dwc_otg_hcd_intr.c:		if (dwc_frame_num_le(qh->sched_frame, hcd->frame_number)) {
+dwc_otg_hcd_intr.c:					   &qh->qh_list_entry);
+dwc_otg_hcd_intr.c:			if(next_sched_frame < 0 || dwc_frame_num_le(qh->sched_frame, next_sched_frame))
+dwc_otg_hcd_intr.c:				next_sched_frame = qh->sched_frame;
+dwc_otg_hcd_intr.c:		} else if (hc->qh->do_split) {
+dwc_otg_hcd_intr.c:		dwc_memcpy(urb->buf + urb->actual_length, hc->qh->dw_align_buf,
+dwc_otg_hcd_intr.c:			qh->data_toggle = DWC_OTG_HC_PID_DATA0;
+dwc_otg_hcd_intr.c:			qh->data_toggle = DWC_OTG_HC_PID_DATA1;
+dwc_otg_hcd_intr.c:				   hc->qh->dw_align_buf, frame_desc->actual_length);
+dwc_otg_hcd_intr.c:				   hc->qh->dw_align_buf, frame_desc->actual_length);
+dwc_otg_hcd_intr.c:		if (hc->qh->do_split && (hc->ep_type == DWC_OTG_EP_TYPE_ISOC) &&
+dwc_otg_hcd_intr.c:	qtd = DWC_CIRCLEQ_FIRST(&qh->qtd_list);
+dwc_otg_hcd_intr.c:	qh->channel = NULL;
+dwc_otg_hcd_intr.c:					   &hc->qh->qh_list_entry);
+dwc_otg_hcd_intr.c:		hc->qh->ping_state = 1;
+dwc_otg_hcd_intr.c:			   qtd->isoc_split_offset, hc->qh->dw_align_buf, len);
+dwc_otg_hcd_intr.c:	if (hc->qh->do_split) {
+dwc_otg_hcd_intr.c:		hc->qh->data_toggle = 0;
+dwc_otg_hcd_intr.c:		dwc_memcpy(urb->buf + urb->actual_length, hc->qh->dw_align_buf,
+dwc_otg_hcd_intr.c:		if (nak_holdoff && qtd->qh->do_split)
+dwc_otg_hcd_intr.c:			hc->qh->nak_frame = dwc_otg_hcd_get_frame_number(hcd);
+dwc_otg_hcd_intr.c:		if (!hc->qh->ping_state) {
+dwc_otg_hcd_intr.c:				hc->qh->ping_state = 1;
+dwc_otg_hcd_intr.c:		if (hc->qh->ping_state) {
+dwc_otg_hcd_intr.c:			hc->qh->ping_state = 0;
+dwc_otg_hcd_intr.c:			    dwc_full_frame_num(hc->qh->sched_frame) ||
+dwc_otg_hcd_intr.c:	hc->qh->ping_state = 1;
+dwc_otg_hcd_intr.c:		if (!hc->qh->ping_state) {
+dwc_otg_hcd_intr.c:				hc->qh->ping_state = 1;
+dwc_otg_hcd_intr.c:	if(hc->qh->do_split)
+dwc_otg_hcd_intr.c:			if (qh->ep_is_in)
+dwc_otg_hcd_intr.c:	qh->sched_frame = dwc_frame_num_inc(qh->sched_frame, qh->interval * (nr_frames - 1));
+dwc_otg_hcd_intr.c:	dwc_hc_t *hc = qh->channel;
+dwc_otg_hcd_intr.c:		if (qh->ep_type == UE_ISOCHRONOUS) {
+dwc_otg_hcd_intr.c:				hcint.b.xfercomp && hc->qh->ep_type == UE_BULK) {
+dwc_otg_hcd_intr.c:				hc->qh->data_toggle = DWC_OTG_HC_PID_DATA1;
+dwc_otg_hcd_intr.c:				hc->qh->data_toggle = DWC_OTG_HC_PID_DATA0;
+dwc_otg_hcd_intr.c:	qtd = DWC_CIRCLEQ_FIRST(&hc->qh->qtd_list);
+dwc_otg_hcd_intr.c:	qtd = DWC_CIRCLEQ_FIRST(&hc->qh->qtd_list);
+dwc_otg_hcd.c:	if (qh->channel != NULL) {
+dwc_otg_hcd.c:		dwc_hc_t *hc = qh->channel;
+dwc_otg_hcd.c:					 &qh->qtd_list, qtd_list_entry) {
+dwc_otg_hcd.c:			qtd = DWC_CIRCLEQ_FIRST(&qh->qtd_list);
+dwc_otg_hcd.c:		if(qh->channel) {
+dwc_otg_hcd.c:			int n = qh->channel->hc_num;
+dwc_otg_hcd.c:			if (fiq_fsm_enable && (hcd->fiq_state->channel[qh->channel->hc_num].fsm != FIQ_PASSTHROUGH)) {
+dwc_otg_hcd.c:				qh->channel->halt_status = DWC_OTG_HC_XFER_URB_DEQUEUE;
+dwc_otg_hcd.c:				qh->channel->halt_pending = 1;
+dwc_otg_hcd.c:				dwc_otg_hc_halt(hcd->core_if, qh->channel,
+dwc_otg_hcd.c:			qh->channel = NULL;
+dwc_otg_hcd.c:	if (urb_qtd->in_process && qh->channel) {
+dwc_otg_hcd.c:			int n = qh->channel->hc_num;
+dwc_otg_hcd.c:				qh->channel->halt_status = DWC_OTG_HC_XFER_URB_DEQUEUE;
+dwc_otg_hcd.c:				qh->channel->halt_pending = 1;
+dwc_otg_hcd.c:				dwc_otg_hc_halt(hcd->core_if, qh->channel,
+dwc_otg_hcd.c:		if (nak_holdoff && qh->do_split && dwc_qh_is_non_per(qh))
+dwc_otg_hcd.c:			qh->nak_frame = 0xFFFF;
+dwc_otg_hcd.c:			qh->channel = NULL;
+dwc_otg_hcd.c:		} else if (DWC_CIRCLEQ_EMPTY(&qh->qtd_list)) {
+dwc_otg_hcd.c:	while (!DWC_CIRCLEQ_EMPTY(&qh->qtd_list) && retry) {
+dwc_otg_hcd.c:	qh->data_toggle = DWC_OTG_HC_PID_DATA0;
+dwc_otg_hcd.c:	qtd = DWC_CIRCLEQ_FIRST(&qh->qtd_list);
+dwc_otg_hcd.c:	qh->channel = hc;
+dwc_otg_hcd.c:	hc->speed = qh->dev_speed;
+dwc_otg_hcd.c:	hc->max_packet = dwc_max_packet(qh->maxp);
+dwc_otg_hcd.c:		hc->do_ping = qh->ping_state;
+dwc_otg_hcd.c:	hc->data_pid_start = qh->data_toggle;
+dwc_otg_hcd.c:	if (qh->do_split) {
+dwc_otg_hcd.c:		if (!qh->dw_align_buf) {
+dwc_otg_hcd.c:			qh->dw_align_buf = DWC_DMA_ALLOC_ATOMIC(dev, buf_size,
+dwc_otg_hcd.c:							 &qh->dw_align_buf_dma);
+dwc_otg_hcd.c:			if (!qh->dw_align_buf) {
+dwc_otg_hcd.c:			dwc_memcpy(qh->dw_align_buf, ptr, hc->xfer_len);
+dwc_otg_hcd.c:		hc->align_buff = qh->dw_align_buf_dma;
+dwc_otg_hcd.c:		hc->multi_count = dwc_hb_mult(qh->maxp);
+dwc_otg_hcd.c:		hc->desc_list_addr = qh->desc_list_dma;
+dwc_otg_hcd.c:	if (qh->do_split) {
+dwc_otg_hcd.c:		switch (qh->ep_type) {
+dwc_otg_hcd.c:	} else if (qh->ep_type == UE_ISOCHRONOUS) {
+dwc_otg_hcd.c:			dwc_otg_qtd_t *qtd = DWC_CIRCLEQ_FIRST(&qh->qtd_list);
+dwc_otg_hcd.c:	dwc_hc_t *hc = qh->channel;
+dwc_otg_hcd.c:		if (qh->ep_type == UE_ISOCHRONOUS) {
+dwc_otg_hcd.c:			dwc_otg_qtd_t *qtd = DWC_CIRCLEQ_FIRST(&qh->qtd_list);
+dwc_otg_hcd.c:	int dev_addr = qh->channel->dev_addr;
+dwc_otg_hcd.c:	int ep_num = qh->channel->ep_num;
+dwc_otg_hcd.c:		if (i == qh->channel->hc_num)
+dwc_otg_hcd.c:	dwc_hc_t *hc = qh->channel;
+dwc_otg_hcd.c:	dwc_otg_qtd_t *qtd = DWC_CIRCLEQ_FIRST(&qh->qtd_list);
+dwc_otg_hcd.c:	st->hs_isoc_info.stride = qh->interval;
+dwc_otg_hcd.c:	dwc_hc_t *hc = qh->channel;
+dwc_otg_hcd.c:	if (qh->channel->xfer_started == 1)
+dwc_otg_hcd.c:	qh->channel->xfer_started = 1;
+dwc_otg_hcd.c:	if(qh->do_split) {
+dwc_otg_hcd.c:		hcd->fops->hub_info(hcd, DWC_CIRCLEQ_FIRST(&qh->qtd_list)->urb->priv, &hub_addr, &port_addr);
+dwc_otg_hcd.c:		if((qh->ep_type == DWC_OTG_EP_TYPE_ISOC) && (!qh->ep_is_in)) {
+dwc_otg_hcd.c:				   &qh->qh_list_entry);
+dwc_otg_hcd.c:		if (fiq_enable && nak_holdoff && qh->do_split) {
+dwc_otg_hcd.c:			if (qh->nak_frame != 0xffff) {
+dwc_otg_hcd.c:				uint16_t next_frame = dwc_frame_num_inc(qh->nak_frame, (qh->ep_type == UE_BULK) ? nak_holdoff : 8);
+dwc_otg_hcd.c:					qh->nak_frame = 0xFFFF;
+dwc_otg_hcd.c:				   &qh->qh_list_entry);
+dwc_otg_hcd.c:					if (qh->nak_frame == 0xFFFF) {
+dwc_otg_hcd.c:				hc->qh->ping_state = 0;
+dwc_otg_hcd.c:					DWC_CIRCLEQ_FIRST(&hc->qh->qtd_list)->error_count;
+dwc_otg_hcd.c:			hc->qh->ping_state = 0;
+dwc_otg_hcd.c:		if(fiq_fsm_enable && qh->do_split && ((dwc_otg_hcd_get_frame_number(hcd) + 1) & 7) > 6)
+dwc_otg_hcd.c:			if (qh->do_split)
+dwc_otg_hcd.c:			if (!hcd->core_if->dma_enable && qh->channel->multi_count > 1) {
+dwc_otg_hcd.c:			status = queue_transaction(hcd, qh->channel,
+dwc_otg_hcd.c:		    qh->channel->requests == qh->channel->multi_count) {
+dwc_otg_hcd.c:					   &qh->qh_list_entry);
+dwc_otg_hcd.c:			status = queue_transaction(hcd, qh->channel,
+dwc_otg_hcd.c:		if (!DWC_LIST_EMPTY(&qh->qh_list_entry)) {
+dwc_otg_hcd.c:	if (DWC_LIST_EMPTY(&qh->qh_list_entry)) {
+dwc_otg_hcd.c:	return qh->usecs;
+dwc_otg_hcd.c:			DWC_CIRCLEQ_FOREACH(qtd, &hc->qh->qtd_list, qtd_list_entry) {
