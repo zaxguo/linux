@@ -1207,6 +1207,7 @@ int pcd_init(dwc_bus_dev_t *_dev)
 	int retval = 0;
 
 	DWC_DEBUGPL(DBG_PCDV, "%s(%p) otg_dev=%p\n", __func__, _dev, otg_dev);
+	printk("%s(%p) otg_dev=%p\n", __func__, _dev, otg_dev);
 
 	otg_dev->pcd = dwc_otg_pcd_init(otg_dev);
 

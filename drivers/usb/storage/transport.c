@@ -422,10 +422,11 @@ int usb_stor_bulk_transfer_buf(struct us_data *us, unsigned int pipe,
 	/* XXX -- here dd entry point */
 	/*trace_printk("xfer %u bytes\n", length);*/
 	int *seq = (int*)(us->current_urb->transfer_buffer + 1);
-#if 0
+#if 1
 	if (length < 1024 && us->current_urb->transfer_buffer != NULL && act_len) {
 		trace_printk("csw before xfer %u (%u) bytes @ %08x\n", length, *act_len, us->current_urb->transfer_dma);
-		print_hex_dump(KERN_WARNING, "urb data:", DUMP_PREFIX_OFFSET, 16, 4,  us->current_urb->transfer_buffer, length*2, 1);
+		/*print_hex_dump(KERN_WARNING, "urb data:", DUMP_PREFIX_OFFSET, 16, 4,  us->current_urb->transfer_buffer, length*2, 1);*/
+		print_hex_dump(KERN_WARNING, "urb data:", DUMP_PREFIX_ADDRESS, 16, 4,  us->current_urb->transfer_buffer, length*2, 1);
 	}
 #endif
 
@@ -434,10 +435,11 @@ int usb_stor_bulk_transfer_buf(struct us_data *us, unsigned int pipe,
 		      usb_stor_blocking_completion, NULL);
 	result = usb_stor_msg_common(us, 0);
 	/* dump urb packets */
-#if 0
+#if 1
 	if (length < 1024 && us->current_urb->transfer_buffer != NULL && act_len) {
 		trace_printk("csw after xfer %u (%u) bytes @ %08x\n", length, *act_len, us->current_urb->transfer_dma);
-		print_hex_dump(KERN_WARNING, "urb data:", DUMP_PREFIX_OFFSET, 16, 4,  us->current_urb->transfer_buffer, length*2, 1);
+		/*print_hex_dump(KERN_WARNING, "urb data:", DUMP_PREFIX_OFFSET, 16, 4,  us->current_urb->transfer_buffer, length*2, 1);*/
+		print_hex_dump(KERN_WARNING, "urb data:", DUMP_PREFIX_ADDRESS, 16, 4,  us->current_urb->transfer_buffer, length*2, 1);
 	}
 #endif
 
@@ -1195,7 +1197,7 @@ int usb_stor_Bulk_transport(struct scsi_cmnd *srb, struct us_data *us)
 		     bcb->Length);
 #endif 
 	/*print_hex_dump(KERN_WARNING, "bcb:", DUMP_PREFIX_OFFSET, 16, 4, bcb->CDB, bcb->Length, 0);*/
-	/*print_hex_dump(KERN_WARNING, "bcb:", DUMP_PREFIX_ADDRESS, 16, 4, bcb->CDB, bcb->Length, 0);*/
+	print_hex_dump(KERN_WARNING, "bcb:", DUMP_PREFIX_ADDRESS, 16, 4, bcb->CDB, bcb->Length, 0);
 
 
 

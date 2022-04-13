@@ -57,15 +57,16 @@
 #include "dwc_otg_pcd_if.h"
 #include "dwc_otg_hcd_if.h"
 #include "dwc_otg_fiq_fsm.h"
+#include "dwc_otg_pcd.h"
 #include <linux/proc_fs.h>
-/*#include "replay/wr_8.h"*/
-/*#include "replay/wr_32_2.h"*/
-/*#include "replay/wr_128.h"*/
-/*#include "replay/wr_256.h"*/
+#include "replay/wr_8.h"
+#include "replay/wr_32_2.h"
+#include "replay/wr_128.h"
+#include "replay/wr_256.h"
 #include "replay/rd_8.h"
-/*#include "replay/rd_32.h"*/
-/*#include "replay/rd_128.h"*/
-/*#include "replay/rd_256.h"*/
+#include "replay/rd_32.h"
+#include "replay/rd_128.h"
+#include "replay/rd_256.h"
 
 #define DWC_DRIVER_VERSION	"3.00a 10-AUG-2012"
 #define DWC_DRIVER_DESC		"HS OTG USB Controller driver"
@@ -74,16 +75,45 @@ bool microframe_schedule=true;
 
 static const char dwc_driver_name[] = "dwc_otg";
 
+/* lwg: global vars for convenience */
 extern void *usb_base;
 void *dma_ctx;
 dwc_otg_core_if_t *g_core_if;
 dwc_otg_device_t *g_dev;
 extern void reset_tasklet_func(void *data);
+extern dwc_otg_pcd_ep_t *get_in_ep(dwc_otg_pcd_t *pcd, uint32_t ep_num);
+extern dwc_otg_pcd_ep_t *get_out_ep(dwc_otg_pcd_t *pcd, uint32_t ep_num);
 static void replay_kernel(void *host) {
 	disable_irq(41);
-#if 1
+	hctsiz_data_t hctsiz;
+	hctsiz.d32 = DWC_READ_REG32(&g_core_if->host_if->hc_regs[0]->hctsiz);
+	printk("next toggle is %d\n", hctsiz.b.pid);
+#if 0
+	/* reset hcd */
 	int i;
-	for (i = 0; i < 1; i++) {
+	for (i = 0; i <= g_core_if->dev_if->num_in_eps; i++) {
+		dwc_otg_pcd_ep_t *ep = get_in_ep(g_dev->pcd, i);
+		dwc_ep_t *ee = &ep->dwc_ep;
+		printk("num = %d, type = %d\n", ee->num, ee->type);
+		if (ee->type == DWC_OTG_EP_TYPE_BULK) {
+			dwc_otg_ep_clear_stall(g_core_if, ee);
+		/*ep = get_out_ep(pcd, i);*/
+		/*dwc_otg_ep_clear_stall(g_core_if, &ep->dwc_ep);*/
+		}
+	}
+	for (i = 0; i <= g_core_if->dev_if->num_out_eps; i++) {
+		dwc_otg_pcd_ep_t *ep = get_out_ep(g_dev->pcd, i);
+		dwc_ep_t *ee = &ep->dwc_ep;
+		printk("num = %d, type = %d\n", ee->num, ee->type);
+		if (ee->type == DWC_OTG_EP_TYPE_BULK) {
+			dwc_otg_ep_clear_stall(g_core_if, ee);
+		/*ep = get_out_ep(pcd, i);*/
+		/*dwc_otg_ep_clear_stall(g_core_if, &ep->dwc_ep);*/
+		}
+	}
+
+#if 0
+	for (i = 0; i < 16; i++) {
 		depctl_data_t data;
 		/*volatile uint32_t *addr = &g_core_if->dev_if->in_ep_regs[i]->diepctl;*/
 		volatile uint32_t *addr = &g_core_if->dev_if->out_ep_regs[i]->doepctl;
@@ -98,11 +128,12 @@ static void replay_kernel(void *host) {
 		}
 	}
 #endif
+#endif
 	printk("start...\n");
 	struct timeval start, end;
 	int us_diff = 0;
 	do_gettimeofday(&start);
-	rd_8(host);
+	/*rd_8(host);*/
 	/*rd_32(host);*/
 	/*rd_128(host);*/
 	/*rd_256(host);*/
@@ -869,6 +900,10 @@ static int dwc_otg_driver_probe(
         DWC_DEBUGPL(DBG_ANY,"Platform resource: start=%08x, len=%08x\n",
                     _dev->resource->start,
                     _dev->resource->end - _dev->resource->start + 1);
+		printk("Platform resource: start=%08x, len=%08x\n",
+                    _dev->resource->start,
+                    _dev->resource->end - _dev->resource->start + 1);
+
 #if 1
         if (!request_mem_region(_dev->resource[0].start,
                                 _dev->resource[0].end - _dev->resource[0].start + 1,

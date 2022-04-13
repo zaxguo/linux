@@ -146,7 +146,7 @@ int32_t dwc_otg_hcd_handle_intr(dwc_otg_hcd_t * dwc_otg_hcd)
 		hfnum.d32 = DWC_READ_REG32(&dwc_otg_hcd->core_if->host_if->host_global_regs->hfnum);
 		if (gintsts.b.sofintr) {
 			/*trace_printk("sof.\n");*/
-			/*printk("sof.\n");*/
+			printk("sof.\n");
 			retval |= dwc_otg_hcd_handle_sof_intr(dwc_otg_hcd);
 		}
 
@@ -809,6 +809,7 @@ void dwc_otg_hcd_save_data_toggle(dwc_hc_t * hc,
 		} else {
 			qh->data_toggle = DWC_OTG_HC_PID_DATA1;
 		}
+		/*printk("%s:%d:save data toggle = %d\n", __func__, __LINE__, qh->data_toggle);*/
 	} else {
 		if (hctsiz.b.pid == DWC_HCTSIZ_DATA0) {
 			qtd->data_toggle = DWC_OTG_HC_PID_DATA0;

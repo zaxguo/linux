@@ -203,6 +203,7 @@ dwc_otg_hcd_intr.c:		} else if (hc->qh->do_split) {
 dwc_otg_hcd_intr.c:		dwc_memcpy(urb->buf + urb->actual_length, hc->qh->dw_align_buf,
 dwc_otg_hcd_intr.c:			qh->data_toggle = DWC_OTG_HC_PID_DATA0;
 dwc_otg_hcd_intr.c:			qh->data_toggle = DWC_OTG_HC_PID_DATA1;
+dwc_otg_hcd_intr.c:		/*printk("%s:%d:save data toggle = %d\n", __func__, __LINE__, qh->data_toggle);*/
 dwc_otg_hcd_intr.c:				   hc->qh->dw_align_buf, frame_desc->actual_length);
 dwc_otg_hcd_intr.c:				   hc->qh->dw_align_buf, frame_desc->actual_length);
 dwc_otg_hcd_intr.c:		if (hc->qh->do_split && (hc->ep_type == DWC_OTG_EP_TYPE_ISOC) &&

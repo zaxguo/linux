@@ -268,6 +268,8 @@ extern void dwc_otg_request_done(dwc_otg_pcd_ep_t * ep,
 void dwc_otg_iso_buffer_done(dwc_otg_pcd_t * pcd, dwc_otg_pcd_ep_t * ep,
 			     void *req_handle);
 
+dwc_otg_pcd_ep_t *get_out_ep(dwc_otg_pcd_t * pcd, uint32_t ep_num);
+dwc_otg_pcd_ep_t *get_in_ep(dwc_otg_pcd_t * pcd, uint32_t ep_num);
 extern void do_test_mode(void *data);
 #endif
 #endif /* DWC_HOST_ONLY */

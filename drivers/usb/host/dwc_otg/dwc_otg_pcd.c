@@ -2431,6 +2431,7 @@ int dwc_otg_pcd_ep_wedge(dwc_otg_pcd_t * pcd, void *ep_handle)
 	return retval;
 }
 
+/* lwg: related to ep reset */
 int dwc_otg_pcd_ep_halt(dwc_otg_pcd_t * pcd, void *ep_handle, int value)
 {
 	dwc_otg_pcd_ep_t *ep;

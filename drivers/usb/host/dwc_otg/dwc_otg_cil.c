@@ -117,7 +117,7 @@ static void init_regmap(void) {
 
 void log_reg_rw(int rw, const char *str, uint32_t off, uint32_t value) {
 	/* do not log, directly return */
-	return;
+	/*return;*/
 #if 0
 	/* look for the code which turns on sof */
 	int i, j;
@@ -3381,6 +3381,10 @@ void dwc_otg_ep_activate(dwc_otg_core_if_t * core_if, dwc_ep_t * ep)
 	DWC_DEBUGPL(DBG_PCDV, "%s() EP%d-%s\n", __func__, ep->num,
 		    (ep->is_in ? "IN" : "OUT"));
 
+	printk("%s() EP%d-%s\n", __func__, ep->num,
+		    (ep->is_in ? "IN" : "OUT"));
+
+
 #ifdef DWC_UTE_PER_IO
 	ep->xiso_frame_num = 0xFFFFFFFF;
 	ep->xiso_active_xfers = 0;
@@ -4725,10 +4729,11 @@ void dwc_otg_ep_clear_stall(dwc_otg_core_if_t * core_if, dwc_ep_t * ep)
 	depctl_data_t depctl;
 	volatile uint32_t *depctl_addr;
 
+	printk("hello??\n");
 	DWC_DEBUGPL(DBG_PCD, "%s ep%d-%s\n", __func__, ep->num,
 		    (ep->is_in ? "IN" : "OUT"));
-	printk(KERN_WARNING, "%s ep%d-%s\n", __func__, ep->num,
-		    (ep->is_in ? "IN" : "OUT"));
+	printk("%s ep%d-%s, type=%d\n", __func__, ep->num,
+		    (ep->is_in ? "IN" : "OUT"), ep->type);
 
 	if (ep->is_in == 1) {
 		depctl_addr = &(core_if->dev_if->in_ep_regs[ep->num]->diepctl);

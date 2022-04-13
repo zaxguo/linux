@@ -160,7 +160,8 @@ static inline void print_desc(struct dwc_otg_dma_desc *ddesc,
 /**
  * This function returns pointer to in ep struct with number ep_num
  */
-static inline dwc_otg_pcd_ep_t *get_in_ep(dwc_otg_pcd_t * pcd, uint32_t ep_num)
+/*static inline dwc_otg_pcd_ep_t *get_in_ep(dwc_otg_pcd_t * pcd, uint32_t ep_num)*/
+dwc_otg_pcd_ep_t *get_in_ep(dwc_otg_pcd_t * pcd, uint32_t ep_num)
 {
 	int i;
 	int num_in_eps = GET_CORE_IF(pcd)->dev_if->num_in_eps;
@@ -178,7 +179,8 @@ static inline dwc_otg_pcd_ep_t *get_in_ep(dwc_otg_pcd_t * pcd, uint32_t ep_num)
 /**
  * This function returns pointer to out ep struct with number ep_num
  */
-static inline dwc_otg_pcd_ep_t *get_out_ep(dwc_otg_pcd_t * pcd, uint32_t ep_num)
+/*static inline dwc_otg_pcd_ep_t *get_out_ep(dwc_otg_pcd_t * pcd, uint32_t ep_num)*/
+dwc_otg_pcd_ep_t *get_out_ep(dwc_otg_pcd_t * pcd, uint32_t ep_num)
 {
 	int i;
 	int num_out_eps = GET_CORE_IF(pcd)->dev_if->num_out_eps;

@@ -2,6 +2,7 @@
 static void rd_8(void *base)
 {
 	dma_addr_t cmd, data;
+	int tries = 0;
 	/* 0,&hcd->core_if->core_global_regs->gintmsk,18,f3000806 : 18 */
 	read(base, 0x18, 0xf3000806);
 	/* 1,&hc_regs->hcint,508,00003fff : 19 */
@@ -29,6 +30,8 @@ static void rd_8(void *base)
 	read(base, 0x2c, 0x00080100);
 	/* 1,&hc_regs->hctsiz,510,0008001f : 28 */
 	write(base, 0x510, 0x0008001f);
+	// pid = 2
+	//write(base, 0x510, 0x4008001f);
 	/* 1,&hc_regs->hcdma,514,f7053000 : 33 */
 	write(base, 0x514, cmd);
 	/* 0,&hc_regs->hcchar,500,01081200 : 34 */
@@ -104,7 +107,8 @@ static void rd_8(void *base)
 	/* 0,&global_regs->gnptxsts,2c,00080100 : 72 */
 	do {
 		val = readl(base + 0x2c);
-	} while (val < 0x00080100);
+	} while (val < 0x00080100 && (tries++ < 1000));
+	tries = 0;
 	read(base, 0x2c, 0x00080100);
 	/* 1,&hc_regs->hctsiz,510,00080200 : 73 */
 	write(base, 0x510, 0x00080200);
@@ -139,6 +143,7 @@ static void rd_8(void *base)
 	read(base, 0x408, IGNORE);
 	/* 0,&_core_if->host_if->host_global_regs->haint,414,00000001 : 92 */
 	read(base, 0x414, 0x00000001);
+	dump_csw();
 	/* 0,&hc_regs->hcint,508,00000023 : 93 */
 	read(base, 0x508, 0x00000023);
 	/* 0,&hc_regs->hcintmsk,50c,00000006 : 94 */
@@ -182,7 +187,9 @@ static void rd_8(void *base)
 	cmd = prepare_read_10(8);
 	do {
 		val = readl(base + 0x2c);
-	} while (val < 0x00080100);
+		printk("val = %08x...\n", val);
+	} while (val < 0x00080100 && tries++ < 1000);
+	tries = 0;
 	/* 0,&global_regs->gnptxsts,2c,00080100 : 121 */
 	read(base, 0x2c, 0x00080100);
 	/* 1,&hc_regs->hctsiz,510,4008001f : 122 */
@@ -260,7 +267,8 @@ static void rd_8(void *base)
 	write(base, 0x18, 0xf3000806);
 	do {
 		val = readl(base + 0x2c);
-	} while (val < 0x00080100);
+	} while (val < 0x00080100 && (tries++ < 1000));
+	tries = 0;
 	/* 0,&global_regs->gnptxsts,2c,00080100 : 162 */
 	read(base, 0x2c, 0x00080100);
 	/* 1,&hc_regs->hctsiz,510,40401000 : 163 */

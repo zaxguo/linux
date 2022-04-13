@@ -303,7 +303,7 @@ void blk_recount_segments(struct request_queue *q, struct bio *bio)
 
 	/* estimate segment number by bi_vcnt for non-cloned bio */
 	if (bio_flagged(bio, BIO_CLONED)) {
-		printk("lwg:%s:%d:.....???",__func__, __LINE__);
+		/*printk("lwg:%s:%d:.....???",__func__, __LINE__);*/
 		seg_cnt = bio_segments(bio);
 	}
 	else {
@@ -313,16 +313,16 @@ void blk_recount_segments(struct request_queue *q, struct bio *bio)
 	if (test_bit(QUEUE_FLAG_NO_SG_MERGE, &q->queue_flags) &&
 			(seg_cnt < queue_max_segments(q))){
 		bio->bi_phys_segments = seg_cnt;
-		printk("lwg:%s:%d:.....???",__func__, __LINE__);
+		/*printk("lwg:%s:%d:.....???",__func__, __LINE__);*/
 	}
 	else {
-		printk("lwg:%s:%d:queue flags = %lx\n", __func__, __LINE__, q->queue_flags);
+		/*printk("lwg:%s:%d:queue flags = %lx\n", __func__, __LINE__, q->queue_flags);*/
 		struct bio *nxt = bio->bi_next;
 
 		bio->bi_next = NULL;
 		bio->bi_phys_segments = __blk_recalc_rq_segments(q, bio, false);
 		bio->bi_next = nxt;
-		printk("lwg:%s:%d:.....???",__func__, __LINE__);
+		/*printk("lwg:%s:%d:.....???",__func__, __LINE__);*/
 	}
 
 	bio_set_flag(bio, BIO_SEG_VALID);

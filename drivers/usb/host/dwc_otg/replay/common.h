@@ -2,7 +2,7 @@
 #define __COMMON_REPLAY_H
 extern void* dma_ctx;
 
-static int tag_cnt = 0xf00;
+static int tag_cnt = 0xd8;
 static int toggle = 0;
 
 #define IGNORE	0xdeadbeef
@@ -19,11 +19,12 @@ static dma_addr_t prepare_allow_medium_removal(int flag) {
 	*(word + 3) = 0x1e060000;
 	if (flag == 1)
 		*(uint8_t *)(virt + 0x13) = 0x01;
-	//print_hex_dump(KERN_WARNING, "urb:", DUMP_PREFIX_ADDRESS, 16, 4, virt, 31, 1);
+	print_hex_dump(KERN_WARNING, "urb:", DUMP_PREFIX_ADDRESS, 16, 4, virt, 31, 1);
 	command_virt = virt;
 	return addr;
 }
 
+/* lwg: csw is encoded as a response to the same DMA buffer as CMD */
 static dma_addr_t prepare_csw(void) {
 	dma_addr_t addr;
 	void *virt = dma_zalloc_coherent(dma_ctx, 512, &addr, GFP_KERNEL);
@@ -31,6 +32,7 @@ static dma_addr_t prepare_csw(void) {
 	/* USBS */
 	*word = 0x53425355;
 	*(word + 1) = tag_cnt++;
+	//command_virt = virt;
 	return addr;
 }
 
@@ -51,6 +53,7 @@ static dma_addr_t prepare_read_10(uint8_t len) {
 	*(word + 2) = len * 512;
 	*(word + 3) = 0x280a0080;
 	*(uint8_t *)(virt + 0x17) = len;
+	command_virt = virt;
 	return addr;
 }
 
@@ -93,7 +96,7 @@ static dma_addr_t prepare_write_10(uint8_t len) {
 }
 
 static void dump_csw(void) {
-	//print_hex_dump(KERN_WARNING, "csw:", DUMP_PREFIX_ADDRESS, 16, 4, command_virt, 13, 1);
+	print_hex_dump(KERN_WARNING, "csw:", DUMP_PREFIX_ADDRESS, 16, 4, command_virt, 32, 1);
 }
 
 static void _poll_for_irq(void *host, int line) {
@@ -155,8 +158,13 @@ static void reset_ep(void) {
 
 static inline void _read(void *base, u32 off, u32 expect, int line) {
 	u32 val = readl(base + off);
+	/* hcchar dev addr must be patched... */
+	if (off == 0x500) {
+		/* a dev addr bit has been incremented by 1 */
+		expect |= 0x00400000;
+	}
 	if (expect != IGNORE && val != expect) {
-		//printk("divergence@off[0x%x]!! %08x != %08x\n", off, val, expect);
+		printk("divergence@off[0x%x:%d]!! %08x != %08x\n", off, line, val, expect);
 #if 1
 		/* gnptxsts */
 		if (off == 0x2c) {
@@ -172,8 +180,13 @@ static inline void _read(void *base, u32 off, u32 expect, int line) {
 
 
 static inline void write(void *base, u32 off, u32 val) {
-	//printk("writing %08x to off %08x\n", val, off);
-	writel(val, base + off);
+	u32 _val = val;
+	/* patch hcchar dev addr fields */
+	if (off == 0x500) {
+		_val |= 0x00400000;
+	}
+	printk("writing %08x to off %08x\n", _val, off);
+	writel(_val, base + off);
 }
 #define read(b, o, v) _read((b), (o), (v), __LINE__)
 #define poll_for_irq(b) _poll_for_irq((b), __LINE__)
